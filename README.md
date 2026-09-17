@@ -321,10 +321,10 @@ module.exports = nextConfig;
 
 ## 👥 HackForge Team & Ownership
 
-- **Member 1 (ML & Detection Lead):** Detection agent wrappers (Semgrep/Bandit/Radon), feature engineering, XGBoost training.
-- **Member 2 (Backend & Orchestration Lead):** FastAPI core, pipeline state machine, diff verification service, database & notify endpoints.
-- **Member 3 (Frontend & Experience Lead):** Next.js 14 "lab notebook" UI, dense finding rail, verified diff viewer, and risk metrics.
-- **Member 4 (Security & Demo Lead):** Broken-app fixtures, realistic vulnerability scenarios, watcher integration, demo execution.
+- **D. Sai Siddhartha Raj (ML & Detection Lead):** Detection agent wrappers (Semgrep/Bandit/Radon), feature engineering, XGBoost training.
+- **M. Kiran Nikhil (Backend & Orchestration Lead):** FastAPI core, pipeline state machine, diff verification service, database & notify endpoints.
+- **K. Huldah Tejaswini (Frontend & Experience Lead):** Next.js 14 "lab notebook" UI, dense finding rail, verified diff viewer, and risk metrics.
+- **G. Vignesh Kumar Goud(Security & Demo Lead):** Broken-app fixtures, realistic vulnerability scenarios, watcher integration, demo execution.
 
 ---
 
