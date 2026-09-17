@@ -72,6 +72,19 @@ export async function openPR(reviewId: string): Promise<PRStatus> {
   return apiFetch(`/pr/${reviewId}`, { method: 'POST' });
 }
 
+export interface MergeResult {
+  status: string;
+  review_id: string;
+  branch: string;
+  message: string;
+  merged_at: string;
+  commit_sha?: string;
+}
+
+export async function mergePR(reviewId: string): Promise<MergeResult> {
+  return apiFetch(`/pr/${reviewId}/merge`, { method: 'POST' });
+}
+
 // ── GET /health ───────────────────────────────────────────────────────────────
 
 export async function getHealth(): Promise<HealthStatus> {

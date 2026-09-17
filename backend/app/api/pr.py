@@ -97,3 +97,40 @@ async def create_pr(
         },
     )
     return pr_response
+
+
+from pydantic import BaseModel
+from typing import Optional
+
+class MergeResponse(BaseModel):
+    status: str
+    review_id: str
+    branch: str
+    message: str
+    merged_at: str
+    commit_sha: Optional[str] = None
+
+
+@router.post(
+    "/pr/{review_id}/merge",
+    response_model=MergeResponse,
+    tags=["delivery"],
+    summary="Approve and merge the verified remediation patch into main",
+)
+async def merge_remediation(
+    review_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> MergeResponse:
+    """
+    Approve and merge the remediation pull request.
+    Merges the patch branch directly to main branch.
+    """
+    result = await github_service.merge_pr(review_id)
+    return MergeResponse(
+        status=result.get("status", "merged"),
+        review_id=review_id,
+        branch=result.get("branch", "main"),
+        message=result.get("message", "Patch merged into main!"),
+        merged_at=result.get("merged_at", ""),
+        commit_sha=result.get("commit_sha"),
+    )

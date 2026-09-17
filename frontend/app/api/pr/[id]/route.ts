@@ -48,7 +48,7 @@ export async function POST(
 ---
 *Generated autonomously by CodeSentinel AI Defense System*`;
 
-  const params = new URLSearchParams({
+  const queryParams = new URLSearchParams({
     expand: '1',
     title,
     body,
@@ -56,7 +56,7 @@ export async function POST(
 
   return NextResponse.json({
     pr_number: 1,
-    pr_url: `https://github.com/${repo}/compare/main...${branch}?${params.toString()}`,
+    pr_url: `https://github.com/${repo}/compare/main...${branch}?${queryParams.toString()}`,
     branch: branch,
     mocked: true,
   });
