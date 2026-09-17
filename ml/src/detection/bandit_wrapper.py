@@ -26,6 +26,7 @@ def run_bandit(code: str, filename: str = "code.py") -> list[dict[str, Any]]:
 
     with tempfile.TemporaryDirectory() as tmpdir:
         code_path = os.path.join(tmpdir, filename)
+        os.makedirs(os.path.dirname(code_path), exist_ok=True)
         with open(code_path, "w", encoding="utf-8") as f:
             f.write(code)
 

@@ -77,7 +77,7 @@ app.add_middleware(
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 
-from app.api import analyze, demo, health, ingest, pr, review  # noqa: E402
+from app.api import analyze, demo, health, ingest, notify, pr, review  # noqa: E402
 
 app.include_router(analyze.router)
 app.include_router(review.router)
@@ -85,3 +85,5 @@ app.include_router(ingest.router)
 app.include_router(pr.router)
 app.include_router(health.router)
 app.include_router(demo.router)
+app.include_router(notify.router)
+

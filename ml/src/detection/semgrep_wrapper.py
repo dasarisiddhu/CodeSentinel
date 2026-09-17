@@ -28,6 +28,7 @@ def run_semgrep(code: str, language: str = "python", filename: str = "code.py") 
     with tempfile.TemporaryDirectory() as tmpdir:
         # Write code to a temp file
         code_path = os.path.join(tmpdir, filename)
+        os.makedirs(os.path.dirname(code_path), exist_ok=True)
         with open(code_path, "w", encoding="utf-8") as f:
             f.write(code)
 

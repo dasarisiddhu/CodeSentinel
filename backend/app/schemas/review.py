@@ -79,6 +79,7 @@ class PRResponse(BaseModel):
 # ── GET /health ───────────────────────────────────────────────────────────────
 
 class HealthResponse(BaseModel):
+    model_config = {"protected_namespaces": ()}
     status: Literal["ok", "degraded"] = "ok"
     groq_reachable: bool = False
     model_loaded: bool = False
