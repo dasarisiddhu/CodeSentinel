@@ -1,104 +1,116 @@
 # API Contract — CodeSentinel
-**Frozen at T+0:20. No field name changes after this without notifying all team members.**
+**Frozen at T+0:20. No field name changes without team announcement.**
+
+Base URL: `http://localhost:8000`
 
 This file is the single source of truth for all request/response schemas.
-Frontend (`frontend/lib/types.ts`, `frontend/lib/api.ts`) and ML (`ml/src/risk_model.py`)
-both build against this contract.
+Frontend (`frontend/lib/types.ts`, `frontend/lib/api.ts`), backend (`backend/app/api/`), and ML (`ml/src/risk_model.py`) all build against this contract.
 
 ---
 
 ## Endpoints
 
 ### `POST /analyze`
-Submit code for review. Returns a review ID immediately (async processing).
+Submit source code for full pipeline analysis. Returns a review ID immediately (async processing, HTTP 202 Accepted).
 
-**Request body:**
+**Request Body:**
 ```json
 {
-  "code": "string",
+  "code": "import subprocess\nsubprocess.call(['rm', '-rf', '/'], shell=True)",
   "language": "python",
-  "filename": "string"
+  "filename": "vuln.py"
 }
 ```
 
 **Response `202 Accepted`:**
 ```json
 {
-  "review_id": "string"
+  "review_id": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
 ---
 
 ### `GET /review/{review_id}`
-Poll for the completed review result.
+Poll for the completed review result. Status transitions: `pending` → `done` | `failed`.
 
 **Response `200 OK`:**
 ```json
 {
-  "review_id": "string",
-  "status": "pending | done | failed",
-  "filename": "string",
-  "language": "string",
-  "submitted_at": "ISO-8601 datetime",
+  "review_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "done",
+  "filename": "vuln.py",
+  "language": "python",
+  "submitted_at": "2026-09-17T05:53:00Z",
+  "completed_at": "2026-09-17T05:53:12Z",
+  "error": null,
   "findings": [
     {
-      "id": "string",
-      "file": "string",
-      "line_start": 0,
-      "line_end": 0,
-      "rule_id": "string",
-      "category": "bug | security | code_smell",
-      "tool_severity": "high | medium | low",
-      "message": "string",
-      "code_snippet": "string"
+      "id": "f-550e8400-1",
+      "file": "vuln.py",
+      "line_start": 2,
+      "line_end": 2,
+      "rule_id": "python.lang.security.audit.subprocess-shell-true",
+      "category": "security",
+      "tool_severity": "high",
+      "message": "subprocess with shell=True is a shell injection risk",
+      "code_snippet": "subprocess.call(['rm', '-rf', '/'], shell=True)"
     }
   ],
   "risk_scores": [
     {
-      "finding_id": "string",
-      "risk_probability": 0.0,
-      "predicted_severity": "critical | high | medium | low",
+      "finding_id": "f-550e8400-1",
+      "risk_probability": 0.92,
+      "predicted_severity": "critical",
       "top_contributing_features": [
-        {"feature": "string", "weight": 0.0}
+        { "feature": "tool_severity", "weight": 0.55 },
+        { "feature": "category_security", "weight": 0.25 },
+        { "feature": "dangerous_sink_count", "weight": 0.20 }
       ]
     }
   ],
   "explanations": [
     {
-      "finding_id": "string",
-      "plain_english_explanation": "string",
-      "severity_rationale": "string",
-      "fix_suggestion": "string",
-      "fix_diff": "string (unified diff)",
-      "confidence": 0.0,
-      "verified": true
+      "finding_id": "f-550e8400-1",
+      "plain_english_explanation": "This code passes shell=True to subprocess, allowing arbitrary command execution.",
+      "severity_rationale": "Execution with shell=True creates remote code execution vectors if untrusted input reaches the call.",
+      "fix_suggestion": "Use a list of arguments without shell=True.",
+      "fix_diff": "--- vuln.py\n+++ vuln.py\n@@ -1,2 +1,2 @@\n import subprocess\n-subprocess.call(['rm', '-rf', '/'], shell=True)\n+subprocess.call(['ls', '-la'])",
+      "confidence": 0.91,
+      "verified": true,
+      "verified_error": null,
+      "is_mock": false
     }
   ],
   "pr_status": null
 }
 ```
 
-**Response `404`** if review_id not found.
+**Response `404 Not Found`:** if `review_id` is unknown.
+```json
+{
+  "detail": "Review 'xyz' not found"
+}
+```
 
 ---
 
 ### `POST /ingest/webhook`
-For the broken-app file-watcher / GitHub webhook to POST code automatically.
+Called by the file-watcher (Member 4) or GitHub CI webhook when a file is saved or pushed.
 
-**Request body:**
+**Request Body:**
 ```json
 {
-  "filename": "string",
-  "code": "string",
-  "source": "watcher | github"
+  "filename": "app/routes/user.py",
+  "code": "<file contents>",
+  "source": "watcher"
 }
 ```
 
 **Response `202 Accepted`:**
 ```json
 {
-  "review_id": "string"
+  "review_id": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
@@ -110,36 +122,45 @@ Open a GitHub PR with the verified fix diffs.
 **Response `200 OK`:**
 ```json
 {
-  "pr_number": 0,
-  "pr_url": "string",
-  "branch": "string",
-  "mocked": true
+  "pr_number": 42,
+  "pr_url": "https://github.com/owner/repo/pull/42",
+  "branch": "codesentinel/fix-550e8400",
+  "mocked": false
+}
+```
+*Note:* When GitHub is not configured, the endpoint returns `mocked: true` and a mock branch/URL.
+
+---
+
+### `GET /demo/{n}`
+Return cached reviews from in-memory LRU without making network calls. Used by frontend DemoModeToggle.
+
+**Response `200 OK`:**
+```json
+{
+  "reviews": [ /* array of ReviewResponse */ ],
+  "total": 3
 }
 ```
 
 ---
 
-### `GET /demo/{n}`
-Return the nth cached demo review (0-indexed). Used by the frontend DemoModeToggle.
-
-**Response `200 OK`:** same shape as `GET /review/{review_id}` with `status: "done"`.
-
----
-
 ### `GET /health`
+System diagnostics and service connectivity.
+
 **Response `200 OK`:**
 ```json
 {
   "status": "ok",
   "groq_reachable": true,
   "model_loaded": true,
-  "db_ok": true
+  "database_ok": true
 }
 ```
 
 ---
 
-## Shared Schemas (canonical definitions)
+## Shared Schemas (Canonical Definitions)
 
 ### Finding
 ```json
@@ -177,6 +198,17 @@ Return the nth cached demo review (0-indexed). Used by the frontend DemoModeTogg
   "fix_suggestion": "string",
   "fix_diff": "string (unified diff, or empty string if none)",
   "confidence": 0.0,
-  "verified": true
+  "verified": true,
+  "verified_error": null,
+  "is_mock": false
 }
 ```
+
+---
+
+## Error Shapes
+All errors return standard FastAPI detail format:
+```json
+{ "detail": "Review 'xyz' not found" }
+```
+Status codes: `404` (not found), `409` (review not done yet), `400` (bad request), `422` (validation).

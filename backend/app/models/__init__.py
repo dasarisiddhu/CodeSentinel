@@ -1,0 +1,1 @@
+# CodeSentinel DB models package
