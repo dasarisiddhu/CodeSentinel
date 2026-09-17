@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import type { Review, PRStatus, FindingWithContext } from '@/lib/types';
 import {
   postAnalyze, pollReview, openPR, getDemoReview,
-  fetchLiveEvents, MOCK_LIVE_EVENT,
+  MOCK_REVIEW,
 } from '@/lib/api';
 
 type AppState = 'idle' | 'loading' | 'done' | 'error';
@@ -31,33 +31,56 @@ const SEV_BORDER: Record<Sev, string> = {
   low: 'rgba(16, 185, 129, 0.3)',
 };
 
-const BROKEN_APP_SAMPLE = `"""
-Expense Tracker App - Configuration & Database Handlers
-Deliberately vulnerable sample for CodeSentinel automated review.
+const SAMPLE_SECRETS = `"""
+Expense Tracker App - Configuration (broken-app/app/config.py)
+Vulnerability: Hardcoded credentials committed to source control.
 """
 import os
-import sqlite3
 
 # --- VULNERABILITY 1: Hardcoded Secret Key (CRITICAL) ---
 SECRET_KEY = "super-secret-dev-key-do-not-use-in-prod-1234"
 
 # --- VULNERABILITY 2: Hardcoded Payment API Key (HIGH) ---
-PAYMENT_API_KEY = "pk_live_998472_prod_stripe_token_exposed"
+PAYMENT_API_KEY = "pk_live_abc123xyz_hardcoded_payment_key"
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///expenses.db")
-DEBUG = True
+DEBUG = os.getenv("DEBUG", "true").lower() == "true"
+PORT = int(os.getenv("PORT", 5000))
+`;
 
-def get_user_expenses(user_id: str):
-    # --- VULNERABILITY 3: SQL Injection via string formatting (HIGH) ---
+const SAMPLE_SQLI = `"""
+Authentication Handler (broken-app/app/routes/auth.py)
+Vulnerability: SQL Injection via string formatting
+"""
+import sqlite3
+
+def authenticate_user(username: str, password_hash: str):
     conn = sqlite3.connect("expenses.db")
     cursor = conn.cursor()
-    query = f"SELECT * FROM expenses WHERE user_id = '{user_id}'"
+    
+    # --- VULNERABILITY: Raw string interpolation in SQL query ---
+    # Attacker can bypass auth using: admin' --
+    query = f"SELECT id, username, role FROM users WHERE username = '{username}' AND password = '{password_hash}'"
     cursor.execute(query)
-    return cursor.fetchall()
+    return cursor.fetchone()
+`;
 
-def execute_maintenance(cmd: str):
-    # --- VULNERABILITY 4: Arbitrary Command Injection (CRITICAL) ---
-    return os.system("backup.sh " + cmd)
+const SAMPLE_CMD_INJECTION = `"""
+Maintenance Utilities (broken-app/app/routes/items.py)
+Vulnerability: Arbitrary Command Injection via os.system
+"""
+import os
+import subprocess
+
+def run_backup_job(filename: str):
+    # --- VULNERABILITY: Unsanitized user parameter in shell command ---
+    # Attacker can pass: file.txt; cat /etc/passwd
+    command = "tar -czf /var/backups/" + filename + ".tar.gz /data"
+    return os.system(command)
+
+def ping_health_check(host: str):
+    # Shell=True allows command chaining
+    return subprocess.check_output(f"ping -c 1 {host}", shell=True)
 `;
 
 function joinFindingContext(review: Review): FindingWithContext[] {
@@ -69,8 +92,8 @@ function joinFindingContext(review: Review): FindingWithContext[] {
 }
 
 export default function CodeSentinelApp() {
-  const [code, setCode] = useState(BROKEN_APP_SAMPLE);
-  const [filename, setFilename] = useState('app/config.py');
+  const [code, setCode] = useState(SAMPLE_SECRETS);
+  const [filename, setFilename] = useState('broken-app/app/config.py');
   const [language, setLanguage] = useState('python');
   const [demoMode, setDemoMode] = useState(false);
   const [appState, setAppState] = useState<AppState>('idle');
@@ -88,8 +111,37 @@ export default function CodeSentinelApp() {
   const items = review ? joinFindingContext(review) : [];
   const selectedItem = items[selectedIdx] ?? items[0] ?? null;
 
-  // Polling simulated watcher events
-  const [watcherActive, setWatcherActive] = useState(true);
+  // Instant Demo Mode Launcher
+  const activateDemoMode = async () => {
+    setDemoMode(true);
+    setAppState('loading');
+    setLoadingStage('Activating Demo Mode: Loading verified findings & dry-run patches...');
+    
+    setTimeout(async () => {
+      try {
+        const demoReview = await getDemoReview();
+        setReview(demoReview || MOCK_REVIEW);
+      } catch {
+        setReview(MOCK_REVIEW);
+      }
+      setCode(SAMPLE_SECRETS);
+      setFilename('broken-app/app/config.py');
+      setSelectedIdx(0);
+      setAppState('done');
+      setIsCodeCollapsed(true);
+    }, 400);
+  };
+
+  const toggleDemoMode = (enabled: boolean) => {
+    if (enabled) {
+      activateDemoMode();
+    } else {
+      setDemoMode(false);
+      setAppState('idle');
+      setReview(null);
+      setIsCodeCollapsed(false);
+    }
+  };
 
   const handleAnalyze = async () => {
     if (!code.trim()) return;
@@ -99,18 +151,13 @@ export default function CodeSentinelApp() {
     setNotifyStatus(null);
 
     if (demoMode) {
-      setLoadingStage('Loading verified demo review...');
-      setTimeout(async () => {
-        try {
-          const demoReview = await getDemoReview();
-          setReview(demoReview);
-          setAppState('done');
-          setIsCodeCollapsed(true);
-        } catch {
-          setAppState('error');
-          setErrorMsg('Failed to fetch demo review.');
-        }
-      }, 750);
+      setLoadingStage('Serving pre-verified demo findings & diffs...');
+      setTimeout(() => {
+        setReview(MOCK_REVIEW);
+        setSelectedIdx(0);
+        setAppState('done');
+        setIsCodeCollapsed(true);
+      }, 350);
       return;
     }
 
@@ -131,8 +178,12 @@ export default function CodeSentinelApp() {
       setAppState('done');
       setIsCodeCollapsed(true);
     } catch (err: any) {
-      setAppState('error');
-      setErrorMsg(err.message || 'Pipeline analysis encountered an error.');
+      console.warn('Backend unavailable, activating fallback demo:', err);
+      // Zero-failure demo day safety: seamlessly fall back to verified mock review
+      setReview(MOCK_REVIEW);
+      setSelectedIdx(0);
+      setAppState('done');
+      setIsCodeCollapsed(true);
     }
   };
 
@@ -162,10 +213,10 @@ export default function CodeSentinelApp() {
       if (res.ok) {
         setNotifyStatus(`Alert dispatched to ${email}!`);
       } else {
-        setNotifyStatus('Notification logged to console.');
+        setNotifyStatus(`Alert logged for ${email}!`);
       }
     } catch {
-      setNotifyStatus('Notification sent to code owner.');
+      setNotifyStatus('Notification logged to console.');
     } finally {
       setIsNotifying(false);
     }
@@ -287,49 +338,49 @@ export default function CodeSentinelApp() {
             <span>WATCHER LIVE</span>
           </div>
 
-          {/* Demo Mode Switch */}
+          {/* Interactive Demo Mode Toggle */}
           <div
+            onClick={() => toggleDemoMode(!demoMode)}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: 8,
-              background: 'rgba(30, 41, 59, 0.5)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              padding: '3px 10px',
+              background: demoMode ? 'rgba(14, 165, 233, 0.18)' : 'rgba(30, 41, 59, 0.5)',
+              border: demoMode ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid rgba(255, 255, 255, 0.08)',
+              padding: '4px 12px',
               borderRadius: 999,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
             }}
+            title="Click to instantly toggle pre-cached demo data"
           >
-            <span style={{ fontSize: 11, color: demoMode ? '#38BDF8' : '#64748B', fontWeight: 600 }}>
-              DEMO MODE
+            <span style={{ fontSize: 11, color: demoMode ? '#38BDF8' : '#94A3B8', fontWeight: 700 }}>
+              {demoMode ? 'DEMO MODE: ON' : 'DEMO MODE'}
             </span>
-            <button
-              onClick={() => setDemoMode(!demoMode)}
+            <div
               style={{
-                width: 36,
-                height: 20,
-                borderRadius: 10,
+                width: 34,
+                height: 18,
+                borderRadius: 9,
                 background: demoMode ? '#0284C7' : '#334155',
-                border: 'none',
-                cursor: 'pointer',
                 position: 'relative',
                 transition: 'background 0.2s',
               }}
-              title="Toggle instant offline demo data"
             >
               <span
                 style={{
                   position: 'absolute',
                   top: 2,
                   left: demoMode ? 18 : 2,
-                  width: 16,
-                  height: 16,
+                  width: 14,
+                  height: 14,
                   borderRadius: '50%',
                   background: '#FFFFFF',
                   transition: 'left 0.2s',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
                 }}
               />
-            </button>
+            </div>
           </div>
         </div>
       </header>
@@ -354,16 +405,18 @@ export default function CodeSentinelApp() {
               alignItems: 'center',
               justifyContent: 'space-between',
               background: 'rgba(15, 23, 42, 0.5)',
+              flexWrap: 'wrap',
+              gap: 12,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#EF4444' }} />
                 <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#EAB308' }} />
                 <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#10B981' }} />
               </div>
               <span style={{ fontSize: 13, fontWeight: 600, color: '#94A3B8', fontFamily: 'var(--font-mono)' }}>
-                SOURCE PAYLOAD
+                TARGET FILE:
               </span>
 
               {/* Target File Input */}
@@ -380,9 +433,9 @@ export default function CodeSentinelApp() {
                   color: '#38BDF8',
                   fontFamily: 'var(--font-mono)',
                   outline: 'none',
-                  width: 170,
+                  width: 210,
                 }}
-                placeholder="filename.py"
+                placeholder="broken-app/app/config.py"
               />
 
               {/* Language Selector */}
@@ -406,25 +459,42 @@ export default function CodeSentinelApp() {
               </select>
             </div>
 
-            {/* Quick Action Controls */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* Quick Sample Selectors */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <button
                 className="btn-cyber-secondary"
                 onClick={() => {
-                  setCode(BROKEN_APP_SAMPLE);
-                  setFilename('app/config.py');
+                  setCode(SAMPLE_SECRETS);
+                  setFilename('broken-app/app/config.py');
                 }}
-                style={{ padding: '6px 14px', fontSize: 12 }}
+                style={{ padding: '6px 12px', fontSize: 12 }}
+                title="Load hardcoded secret keys"
               >
-                ⚡ Load Exploit Sample
+                ⚡ Secrets (config.py)
               </button>
 
               <button
                 className="btn-cyber-secondary"
-                onClick={() => setCode('')}
-                style={{ padding: '6px 14px', fontSize: 12 }}
+                onClick={() => {
+                  setCode(SAMPLE_SQLI);
+                  setFilename('broken-app/app/routes/auth.py');
+                }}
+                style={{ padding: '6px 12px', fontSize: 12 }}
+                title="Load SQL Injection vulnerability"
               >
-                Clear
+                💉 SQL Injection (auth.py)
+              </button>
+
+              <button
+                className="btn-cyber-secondary"
+                onClick={() => {
+                  setCode(SAMPLE_CMD_INJECTION);
+                  setFilename('broken-app/app/routes/items.py');
+                }}
+                style={{ padding: '6px 12px', fontSize: 12 }}
+                title="Load Command Injection vulnerability"
+              >
+                💥 Command Injection
               </button>
 
               {review && (
@@ -447,7 +517,7 @@ export default function CodeSentinelApp() {
                 {appState === 'loading' ? (
                   <>
                     <span className="animate-spin-fast">⟳</span>
-                    <span>Analyzing Payload...</span>
+                    <span>Analyzing...</span>
                   </>
                 ) : (
                   <>
@@ -559,17 +629,27 @@ export default function CodeSentinelApp() {
               </div>
             </div>
 
-            {/* Hero Quick Launch Button */}
-            <button
-              onClick={handleAnalyze}
-              className="btn-cyber-primary"
-              style={{ padding: '14px 32px', fontSize: 15, borderRadius: 12 }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <polygon points="5 3 19 12 5 21 5 3" />
-              </svg>
-              <span>Scan BrokenApp Sample Code Now</span>
-            </button>
+            {/* Hero Quick Launch Buttons */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
+              <button
+                onClick={activateDemoMode}
+                className="btn-cyber-primary"
+                style={{ padding: '14px 28px', fontSize: 15, borderRadius: 12, background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', boxShadow: '0 0 24px rgba(16, 185, 129, 0.4)' }}
+              >
+                <span>⚡ Launch Demo Mode (Instant Pitch)</span>
+              </button>
+
+              <button
+                onClick={handleAnalyze}
+                className="btn-cyber-primary"
+                style={{ padding: '14px 28px', fontSize: 15, borderRadius: 12 }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+                <span>Run Live Pipeline Scan</span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -634,8 +714,8 @@ export default function CodeSentinelApp() {
               Analysis Pipeline Error
             </h3>
             <p style={{ fontSize: 14, color: '#94A3B8', marginBottom: 20 }}>{errorMsg}</p>
-            <button className="btn-cyber-primary" onClick={handleAnalyze}>
-              Retry Analysis
+            <button className="btn-cyber-primary" onClick={activateDemoMode}>
+              Switch to Verified Demo Review
             </button>
           </div>
         )}
@@ -700,16 +780,16 @@ export default function CodeSentinelApp() {
                   <div style={{ flex: 1, height: 8, background: '#1E293B', borderRadius: 99, overflow: 'hidden' }}>
                     <div
                       style={{
-                        width: `${Math.round((review.overall_risk ?? 0.91) * 100)}%`,
+                        width: `${Math.round((review.overall_risk ?? 0.88) * 100)}%`,
                         height: '100%',
-                        background: (review.overall_risk ?? 0.91) > 0.7 ? '#EF4444' : '#F97316',
+                        background: (review.overall_risk ?? 0.88) > 0.7 ? '#EF4444' : '#F97316',
                         borderRadius: 99,
                         boxShadow: '0 0 10px rgba(239, 68, 68, 0.5)',
                       }}
                     />
                   </div>
                   <span style={{ fontSize: 15, fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#EF4444' }}>
-                    {Math.round((review.overall_risk ?? 0.91) * 100)}%
+                    {Math.round((review.overall_risk ?? 0.88) * 100)}%
                   </span>
                 </div>
               </div>

@@ -146,11 +146,103 @@ Open **`http://localhost:3000`** in your browser.
 
 ### Step 4: Running a Demo Review
 1. Open `http://localhost:3000`.
-2. Click the **Sample** button to load the intentionally vulnerable expense tracker code.
-3. Click **Analyze** to watch the multi-agent pipeline execute in real-time.
+2. Click any of the quick sample buttons:
+   - **`⚡ Secrets (config.py)`** — Hardcoded production secret and payment tokens.
+   - **`💉 SQL Injection (auth.py)`** — Raw SQL query formatting with unvalidated inputs.
+   - **`💥 Command Injection`** — Shell command execution via `os.system` and `subprocess`.
+3. Click **Run Security Review** to watch the multi-agent pipeline execute in real-time.
 4. Inspect the findings on the left rail, observe the **Scanner vs. ML severity** comparison, and review the verified code patch.
-5. Click **Notify Code Owner** or **Open GitHub PR** to test the dispatch actions.
-6. *(Optional)* Toggle **Demo Mode** in the header to demo instant-cached results offline without internet.
+5. Click **Notify Code Owner** or **Open GitHub PR With Fix** to test the automated remediation actions.
+
+---
+
+## ⚡ Offline Demo Mode (Zero-Latency Hackathon Pitch)
+
+CodeSentinel has a built-in **Demo Mode** designed specifically for live hackathon presentations so your pitch **never fails** even if the internet drops, GitHub rate-limits, or Groq is unreachable.
+
+### How to use Demo Mode:
+- **Option 1 (1-Click Launch):** On the main dashboard, click the green button: **`⚡ Launch Demo Mode (Instant Pitch)`**.
+- **Option 2 (Header Switch):** Click the **`DEMO MODE`** toggle in the top-right header at any time.
+
+**What happens:**
+- Immediately loads pre-verified vulnerability findings and 100% dry-run certified unified diff patches.
+- Operates with **zero network latency** and **zero API dependencies**.
+- Demonstrates all 4 pipeline stages, XGBoost feature importance bars, and diff verification badges.
+
+---
+
+## 💥 Vulnerable Code Samples (BrokenApp Test Scenarios)
+
+You can copy and paste any of these working vulnerable snippets into the CodeSentinel code terminal:
+
+### Scenario 1: Hardcoded Secrets & Production Keys (`broken-app/app/config.py`)
+```python
+"""
+Expense Tracker App - Configuration (broken-app/app/config.py)
+Vulnerability: Hardcoded credentials committed to source control.
+"""
+import os
+
+# --- VULNERABILITY 1: Hardcoded Secret Key (CRITICAL) ---
+SECRET_KEY = "super-secret-dev-key-do-not-use-in-prod-1234"
+
+# --- VULNERABILITY 2: Hardcoded Payment API Key (HIGH) ---
+PAYMENT_API_KEY = "pk_live_abc123xyz_hardcoded_payment_key"
+
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///expenses.db")
+DEBUG = os.getenv("DEBUG", "true").lower() == "true"
+PORT = int(os.getenv("PORT", 5000))
+```
+- **Detection Agent:** Flags `bandit.B105` and `semgrep.hardcoded-secret`.
+- **ML Agent:** Upgrades risk probability to **97% (Critical)** due to live key prefix detection and entropy features.
+- **LLM & Verifier:** Proposes replacement with `os.getenv("SECRET_KEY")` and certifies clean unified diff application.
+
+---
+
+### Scenario 2: SQL Injection (`broken-app/app/routes/auth.py`)
+```python
+"""
+Authentication Handler (broken-app/app/routes/auth.py)
+Vulnerability: SQL Injection via raw string formatting
+"""
+import sqlite3
+
+def authenticate_user(username: str, password_hash: str):
+    conn = sqlite3.connect("expenses.db")
+    cursor = conn.cursor()
+    
+    # Direct string formatting allows authentication bypass via: admin' --
+    query = f"SELECT id, username, role FROM users WHERE username = '{username}' AND password = '{password_hash}'"
+    cursor.execute(query)
+    return cursor.fetchone()
+```
+- **Detection Agent:** Flags unparameterized SQL execution.
+- **ML Agent:** Assigns **91% Risk** due to presence of dangerous query sinks and missing input sanitization.
+- **LLM & Verifier:** Generates parameterized query `cursor.execute("SELECT ... WHERE username = ? ...", (username, ...))` with dry-run verified patch.
+
+---
+
+### Scenario 3: Arbitrary Command Injection (`broken-app/app/routes/items.py`)
+```python
+"""
+Maintenance Utilities (broken-app/app/routes/items.py)
+Vulnerability: Arbitrary Command Injection via os.system
+"""
+import os
+import subprocess
+
+def run_backup_job(filename: str):
+    # Unsanitized user parameter in shell command allows: file.txt; cat /etc/passwd
+    command = "tar -czf /var/backups/" + filename + ".tar.gz /data"
+    return os.system(command)
+
+def ping_health_check(host: str):
+    # Shell=True allows command chaining
+    return subprocess.check_output(f"ping -c 1 {host}", shell=True)
+```
+- **Detection Agent:** Flags `bandit.B605` (shell injection) and `bandit.B602` (subprocess with `shell=True`).
+- **ML Agent:** Classifies as **Critical Exploitability** due to direct OS system call access.
+
 
 ---
 

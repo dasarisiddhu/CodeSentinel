@@ -54,3 +54,5 @@ codesentinel.db
 ml/data/raw/
 ml/models/*.pkl
 ml/models/*.joblib
+
+.env
