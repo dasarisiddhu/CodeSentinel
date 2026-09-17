@@ -1,0 +1,24 @@
+# ML Requirements
+# Team Member 1 — install with: pip install -r ml/requirements.txt
+
+# Core ML
+xgboost>=2.0.0
+lightgbm>=4.0.0       # alternative to xgboost — install one or both
+scikit-learn>=1.4.0
+numpy>=1.26.0
+pandas>=2.1.0
+
+# Code analysis tools (Detection Agent)
+semgrep>=1.45.0       # primary multi-language static analyzer
+bandit>=1.7.5         # Python security linter
+radon>=6.0.0          # cyclomatic complexity + maintainability index
+
+# Diff verification
+unidiff>=0.7.5
+
+# Visualization (for confusion matrix PNG)
+matplotlib>=3.8.0
+seaborn>=0.13.0
+
+# Utilities
+tqdm>=4.66.0          # progress bars for dataset processing
