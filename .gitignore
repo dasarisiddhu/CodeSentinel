@@ -10,6 +10,7 @@ frontend/.next/
 out/
 build/
 dist/
+*.tsbuildinfo
 
 # Python
 __pycache__/

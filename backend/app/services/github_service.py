@@ -260,11 +260,11 @@ def _pr_body(explanation: Explanation, review_id: str) -> str:
 # ── Mock PR path ──────────────────────────────────────────────────────────────
 
 def _mock_pr(review_id: str, filename: str) -> PRResponse:
-    short_id = review_id[:8] if review_id else "demo"
     repo = settings.github_repo if (settings.github_repo and settings.github_repo != "owner/repo-name") else "dasarisiddhu/CodeSentinel"
+    branch_name = "codesentinel/fix-broken-app-secrets"
     return PRResponse(
         pr_number=1,
-        pr_url=f"https://github.com/{repo}/pull/1",
-        branch=f"codesentinel/fix-{short_id}",
+        pr_url=f"https://github.com/{repo}/pull/new/{branch_name}",
+        branch=branch_name,
         mocked=True,
     )

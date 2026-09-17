@@ -1,0 +1,18 @@
+import { NextResponse } from 'next/server';
+import { MOCK_REVIEW } from '@/lib/api';
+
+export async function GET() {
+  const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    const backendRes = await fetch(`${backendUrl}/demo/review`, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (backendRes.ok) {
+      const data = await backendRes.json();
+      return NextResponse.json(data);
+    }
+  } catch {}
+
+  return NextResponse.json(MOCK_REVIEW);
+}
