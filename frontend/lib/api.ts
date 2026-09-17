@@ -37,6 +37,7 @@ export interface AnalyzePayload {
   code: string;
   language: string;
   filename: string;
+  user_query?: string;
 }
 
 export async function postAnalyze(

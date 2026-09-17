@@ -44,6 +44,7 @@ async def analyze(
     code: str,
     language: str,
     filename: str,
+    user_query: str | None = None,
 ) -> list[Finding]:
     """
     Run Semgrep + Bandit + Radon on the supplied source code.
@@ -74,12 +75,17 @@ async def analyze(
         except Exception as exc:
             logger.warning("run_all_detectors encountered an error: %s", exc)
 
-    # If real scanners produced findings, return them
-    if findings:
-        return findings
+    # If real scanners produced findings, use them, otherwise fallback heuristics
+    if not findings:
+        findings = _detect_heuristic_findings(code, filename)
 
-    # ── 2. Fallback Heuristics (Ensures zero demo-day failures) ────────────────
-    return _detect_heuristic_findings(code, filename)
+    if user_query:
+        q = user_query.lower().strip()
+        for f in findings:
+            if any(term in f.message.lower() or term in f.rule_id.lower() or term in f.code_snippet.lower() for term in q.split()):
+                f.message = f"[Targeted Query Focus: '{user_query}'] {f.message}"
+
+    return findings
 
 
 def _detect_heuristic_findings(code: str, filename: str) -> list[Finding]:
@@ -155,6 +161,58 @@ def _detect_heuristic_findings(code: str, filename: str) -> list[Finding]:
             "security",
             "medium",
             "Use of unsafe yaml.load() without SafeLoader allows arbitrary object instantiation.",
+        ),
+        # C / C++ Memory Safety & Buffer Overflows
+        (
+            r"\b(strcpy|strcat|gets)\s*\(",
+            "c.lang.security.insecure-api.banned-function",
+            "security",
+            "critical",
+            "Use of unsafe memory function (strcpy/strcat/gets) causes stack-based buffer overflow (CWE-120).",
+        ),
+        (
+            r"\b(sprintf|vsprintf)\s*\(",
+            "c.lang.security.insecure-api.potential-buffer-overflow",
+            "security",
+            "high",
+            "Unbounded string formatting with sprintf causes buffer overflow. Replace with snprintf.",
+        ),
+        (
+            r"\b(system|popen)\s*\(",
+            "c.lang.security.command-injection",
+            "security",
+            "high",
+            "Invoking system() or popen() with external parameters permits arbitrary shell injection (CWE-78).",
+        ),
+        # Java Vulnerabilities
+        (
+            r"(?i)(?:executeQuery|executeUpdate|execute)\s*\(\s*[\"'].*\+",
+            "java.lang.security.audit.sqli.jdbc-concatenation",
+            "security",
+            "high",
+            "Direct string concatenation inside JDBC query leads to SQL Injection (CWE-89).",
+        ),
+        (
+            r"(?i)Runtime\.getRuntime\(\)\.exec\(|ProcessBuilder\(",
+            "java.lang.security.audit.rce.command-injection",
+            "security",
+            "high",
+            "Subprocess execution via Runtime.exec() allows arbitrary command injection (CWE-78).",
+        ),
+        (
+            r"(?i)(?:readObject|readUnshared)\s*\(",
+            "java.lang.security.audit.deserialization",
+            "security",
+            "high",
+            "Java native deserialization of untrusted streams leads to Remote Code Execution (CWE-502).",
+        ),
+        # JavaScript / TypeScript
+        (
+            r"\binnerHTML\s*=",
+            "javascript.browser.security.dom-xss",
+            "security",
+            "high",
+            "Assigning unescaped data to innerHTML allows Cross-Site Scripting (DOM XSS / CWE-79).",
         ),
     ]
 

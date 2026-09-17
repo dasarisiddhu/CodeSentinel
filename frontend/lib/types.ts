@@ -49,6 +49,8 @@ export type ReviewStatus = 'pending' | 'done' | 'failed';
 export interface Review {
   review_id: string;
   status: ReviewStatus;
+  filename?: string;
+  language?: string;
   findings: Finding[];
   risk_scores: RiskScore[];
   explanations: Explanation[];

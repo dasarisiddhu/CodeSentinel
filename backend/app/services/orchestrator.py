@@ -45,21 +45,23 @@ async def run_pipeline(
     language: str,
     filename: str,
     source: str = "api",
+    user_query: str | None = None,
 ) -> tuple[str, ReviewResponse]:
     """
     Execute the full multi-agent pipeline for one code submission.
 
     Args:
-        db:        Async DB session.
-        code:      Raw source code string.
-        language:  Language tag (e.g. "python").
-        filename:  Source filename.
-        source:    Ingestion source label ("api" | "watcher" | "github").
+        db:          Async DB session.
+        code:        Raw source code string.
+        language:    Language tag (e.g. "python").
+        filename:    Source filename.
+        source:      Ingestion source label ("api" | "watcher" | "github").
+        user_query:  Optional user security focus query.
 
     Returns:
         (review_id, ReviewResponse)
     """
-    chash = content_hash(code)
+    chash = content_hash(code + (f":query={user_query}" if user_query else ""))
 
     # ── Cache hit: identical code already reviewed ────────────────────────────
     cached = cache.get_by_hash(chash)
@@ -98,7 +100,7 @@ async def run_pipeline(
     try:
         # ── Stage 1: Detection ────────────────────────────────────────────────
         with log_stage("detection", review_id=review_id) as ctx:
-            findings = await detection_agent.analyze(code, language, filename)
+            findings = await detection_agent.analyze(code, language, filename, user_query=user_query)
             ctx["finding_count"] = len(findings)
 
         # ── Short-circuit if nothing found ───────────────────────────────────

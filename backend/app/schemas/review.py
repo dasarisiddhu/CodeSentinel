@@ -20,6 +20,7 @@ class AnalyzeRequest(BaseModel):
     code: str = Field(..., min_length=1, description="Raw source code to analyse")
     language: str = Field(default="python", description="Source language tag")
     filename: str = Field(default="untitled.py")
+    user_query: str | None = Field(default=None, description="Optional user security focus query")
 
 
 class AnalyzeResponse(BaseModel):

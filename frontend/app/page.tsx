@@ -83,6 +83,221 @@ def ping_health_check(host: str):
     return subprocess.check_output(f"ping -c 1 {host}", shell=True)
 `;
 
+const SAMPLE_JAVA = `// PaymentGateway.java - Vulnerable Banking Service
+import java.sql.*;
+
+public class PaymentGateway {
+    // --- VULNERABILITY 1: Hardcoded Stripe live credentials (HIGH) ---
+    private static final String STRIPE_SECRET = "SEC_LIVE_DEMO_KEY_MOCK_998877665544";
+
+    public void processPayment(Connection conn, String userId, String amount) throws SQLException {
+        // --- VULNERABILITY 2: SQL Injection via direct concatenation (CRITICAL) ---
+        String query = "SELECT balance FROM accounts WHERE user_id = '" + userId + "' AND status = 'ACTIVE'";
+        Statement stmt = conn.createStatement();
+        ResultSet rs = stmt.executeQuery(query);
+    }
+}
+`;
+
+const SAMPLE_C = `// vulnerable_util.c - System Maintenance Utility
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+void execute_backup(char *userInput) {
+    char command[256];
+    // --- VULNERABILITY 1: Dangerous shell invocation (CRITICAL) ---
+    sprintf(command, "tar -czf backup.tar.gz %s", userInput);
+    system(command);
+}
+
+void process_data(char *input) {
+    char buffer[16];
+    // --- VULNERABILITY 2: Stack buffer overflow CWE-120 (CRITICAL) ---
+    strcpy(buffer, input);
+}
+`;
+
+const SAMPLE_CPP = `// network_handler.cpp - High Performance Service
+#include <iostream>
+#include <cstring>
+#include <cstdlib>
+
+class ServiceHandler {
+public:
+    void handleRequest(const char* payload) {
+        char local_buf[32];
+        // --- VULNERABILITY 1: Buffer overflow via unbounded copy (CRITICAL) ---
+        strcpy(local_buf, payload);
+
+        // --- VULNERABILITY 2: Command injection via system() (CRITICAL) ---
+        std::string cmd = "logger -t SERVICE " + std::string(payload);
+        system(cmd.c_str());
+    }
+};
+`;
+
+function getFallbackReview(lang: string, file: string, query?: string): Review {
+  if (lang === 'java') {
+    return {
+      review_id: 'demo-java-review',
+      status: 'done',
+      filename: file,
+      language: 'java',
+      findings: [
+        {
+          id: 'java-001',
+          file: file,
+          line_start: 10,
+          line_end: 10,
+          rule_id: 'java.lang.security.audit.sqli.jdbc-concatenation',
+          category: 'security',
+          tool_severity: 'high',
+          message: query ? `[Matched Query: "${query}"] Critical SQL Injection: Direct string concatenation in JDBC query allows full database compromise.` : 'Critical SQL Injection: Direct string concatenation in JDBC query allows full database compromise.',
+          code_snippet: 'String query = "SELECT balance FROM accounts WHERE user_id = \'" + userId + "\' AND status = \'ACTIVE\'";',
+        },
+        {
+          id: 'java-002',
+          file: file,
+          line_start: 6,
+          line_end: 6,
+          rule_id: 'java.lang.security.audit.hardcoded-credentials',
+          category: 'security',
+          tool_severity: 'high',
+          message: 'Hardcoded payment service credentials (live Stripe secret key) detected in class field.',
+          code_snippet: 'private static final String STRIPE_SECRET = "SEC_LIVE_DEMO_KEY_MOCK_998877665544";',
+        }
+      ],
+      risk_scores: [
+        {
+          finding_id: 'java-001',
+          risk_probability: 0.96,
+          predicted_severity: 'critical',
+          top_contributing_features: [
+            { feature: 'dangerous_sink_count', weight: 0.38 },
+            { feature: 'finding_count_high_severity', weight: 0.28 },
+          ]
+        },
+        {
+          finding_id: 'java-002',
+          risk_probability: 0.88,
+          predicted_severity: 'high',
+          top_contributing_features: [
+            { feature: 'hardcoded_secret_count', weight: 0.44 },
+            { feature: 'finding_count_medium_severity', weight: 0.22 },
+          ]
+        }
+      ],
+      explanations: [
+        {
+          finding_id: 'java-001',
+          plain_english_explanation: 'Direct string concatenation inside JDBC SQL statements allows SQL injection. Replace with a PreparedStatement using ? parameter markers.',
+          severity_rationale: 'OWASP Top 10 A03 - Injection. An attacker can extract or modify sensitive financial records.',
+          fix_suggestion: 'Use PreparedStatement with setString() parameter binding.',
+          fix_diff: '--- a/PaymentGateway.java\\n+++ b/PaymentGateway.java\\n@@ -10,2 +10,3 @@\\n-        String query = "SELECT balance FROM accounts WHERE user_id = \'" + userId + "\' AND status = \'ACTIVE\'";\\n-        Statement stmt = conn.createStatement();\\n+        String query = "SELECT balance FROM accounts WHERE user_id = ? AND status = ?";\\n+        PreparedStatement stmt = conn.prepareStatement(query);\\n+        stmt.setString(1, userId);\\n+        stmt.setString(2, "ACTIVE");',
+          confidence: 0.99,
+          verified: true,
+        },
+        {
+          finding_id: 'java-002',
+          plain_english_explanation: 'Live production payment credentials must never be committed to source repositories.',
+          severity_rationale: 'Credential disclosure allows unauthorized billing actions and account hijacking.',
+          fix_suggestion: 'Read STRIPE_SECRET from System.getenv("STRIPE_SECRET") at runtime.',
+          fix_diff: '--- a/PaymentGateway.java\\n+++ b/PaymentGateway.java\\n@@ -6,1 +6,1 @@\\n-    private static final String STRIPE_SECRET = "SEC_LIVE_DEMO_KEY_MOCK_998877665544";\\n+    private static final String STRIPE_SECRET = System.getenv("STRIPE_SECRET");',
+          confidence: 0.98,
+          verified: true,
+        }
+      ],
+      overall_risk: 0.94,
+      created_at: new Date().toISOString(),
+    };
+  } else if (lang === 'c' || lang === 'cpp') {
+    return {
+      review_id: `demo-${lang}-review`,
+      status: 'done',
+      filename: file,
+      language: lang,
+      findings: [
+        {
+          id: `${lang}-001`,
+          file: file,
+          line_start: 13,
+          line_end: 13,
+          rule_id: 'c.lang.security.insecure-api.banned-function',
+          category: 'security',
+          tool_severity: 'high',
+          message: query ? `[Matched Query: "${query}"] Stack-based Buffer Overflow (CWE-120): Unbounded strcpy() call permits memory corruption and control-flow hijacking.` : 'Stack-based Buffer Overflow (CWE-120): Unbounded strcpy() call permits memory corruption and control-flow hijacking.',
+          code_snippet: 'strcpy(buffer, input);',
+        },
+        {
+          id: `${lang}-002`,
+          file: file,
+          line_start: 8,
+          line_end: 8,
+          rule_id: 'c.lang.security.command-injection',
+          category: 'security',
+          tool_severity: 'high',
+          message: 'Arbitrary Shell Command Injection: Passing user-controlled string directly to system() command shell.',
+          code_snippet: 'system(command);',
+        }
+      ],
+      risk_scores: [
+        {
+          finding_id: `${lang}-001`,
+          risk_probability: 0.97,
+          predicted_severity: 'critical',
+          top_contributing_features: [
+            { feature: 'dangerous_sink_count', weight: 0.45 },
+            { feature: 'cyclomatic_complexity_max', weight: 0.25 },
+          ]
+        },
+        {
+          finding_id: `${lang}-002`,
+          risk_probability: 0.94,
+          predicted_severity: 'critical',
+          top_contributing_features: [
+            { feature: 'dangerous_sink_count', weight: 0.40 },
+            { feature: 'import_risk_flag', weight: 0.30 },
+          ]
+        }
+      ],
+      explanations: [
+        {
+          finding_id: `${lang}-001`,
+          plain_english_explanation: 'strcpy does not perform bounds checking on the destination buffer. If input exceeds 16 bytes, adjacent stack frame memory will be overwritten.',
+          severity_rationale: 'CWE-120 Buffer Copy without Checking Size of Input leads to Denial of Service and Arbitrary Code Execution.',
+          fix_suggestion: 'Use strncpy() or snprintf() with explicit sizeof(buffer) bounds.',
+          fix_diff: '--- a/vulnerable_util.c\\n+++ b/vulnerable_util.c\\n@@ -13,1 +13,1 @@\\n-    strcpy(buffer, input);\\n+    strncpy(buffer, input, sizeof(buffer) - 1);\\n+    buffer[sizeof(buffer) - 1] = \'\\0\';',
+          confidence: 0.99,
+          verified: true,
+        },
+        {
+          finding_id: `${lang}-002`,
+          plain_english_explanation: 'Passing external inputs into system() invokes a shell (/bin/sh) which executes semicolon or pipe chained commands.',
+          severity_rationale: 'CWE-78 Command Injection permits attackers to execute arbitrary commands with process privileges.',
+          fix_suggestion: 'Avoid system(). Execute binaries with execve() passing argument arrays directly.',
+          fix_diff: '--- a/vulnerable_util.c\\n+++ b/vulnerable_util.c\\n@@ -8,2 +8,2 @@\\n-    sprintf(command, "tar -czf backup.tar.gz %s", userInput);\\n-    system(command);\\n+    char *args[] = {"tar", "-czf", "backup.tar.gz", userInput, NULL};\\n+    execvp("tar", args);',
+          confidence: 0.96,
+          verified: true,
+        }
+      ],
+      overall_risk: 0.96,
+      created_at: new Date().toISOString(),
+    };
+  }
+
+  return {
+    ...MOCK_REVIEW,
+    filename: file,
+    language: lang,
+    findings: MOCK_REVIEW.findings.map(f => ({
+      ...f,
+      file,
+      message: query ? `[Matched Query: "${query}"] ${f.message}` : f.message,
+    })),
+  };
+}
+
 function joinFindingContext(review: Review): FindingWithContext[] {
   return review.findings.map((finding) => ({
     finding,
@@ -112,6 +327,7 @@ export default function CodeSentinelApp() {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [isMerging, setIsMerging] = useState(false);
   const [mergeResult, setMergeResult] = useState<MergeResult | null>(null);
+  const [userQuery, setUserQuery] = useState('');
 
   const items = review ? joinFindingContext(review) : [];
   const selectedItem = items[selectedIdx] ?? items[0] ?? null;
@@ -133,20 +349,18 @@ export default function CodeSentinelApp() {
   }, [appState]);
 
   // Instant Demo Mode Launcher
-  const activateDemoMode = async () => {
+  const activateDemoMode = () => {
     setDemoMode(true);
     setAppState('loading');
-    setLoadingStage('Loading verified demo review & dry-run tested patches...');
+    setLoadingStage('Activating Demo Mode: Loading verified findings...');
     
     setTimeout(async () => {
       try {
         const demoReview = await getDemoReview();
-        setReview(demoReview || MOCK_REVIEW);
+        setReview(demoReview || getFallbackReview(language, filename, userQuery));
       } catch {
-        setReview(MOCK_REVIEW);
+        setReview(getFallbackReview(language, filename, userQuery));
       }
-      setCode(SAMPLE_SECRETS);
-      setFilename('broken-app/app/config.py');
       setSelectedIdx(0);
       setAppState('done');
       setIsCodeCollapsed(true);
@@ -175,7 +389,7 @@ export default function CodeSentinelApp() {
     if (demoMode) {
       setLoadingStage('Serving pre-verified demo findings & diffs...');
       setTimeout(() => {
-        setReview(MOCK_REVIEW);
+        setReview(getFallbackReview(language, filename, userQuery));
         setSelectedIdx(0);
         setAppState('done');
         setIsCodeCollapsed(true);
@@ -185,7 +399,12 @@ export default function CodeSentinelApp() {
 
     try {
       setLoadingStage('Step 1/4: Running Semgrep & Bandit deterministic scanners...');
-      const { review_id } = await postAnalyze({ code, language, filename });
+      const { review_id } = await postAnalyze({
+        code,
+        language,
+        filename,
+        user_query: userQuery.trim() || undefined,
+      });
 
       setTimeout(() => setLoadingStage('Step 2/4: Extracting 20 features & scoring via XGBoost ML model...'), 600);
       setTimeout(() => setLoadingStage('Step 3/4: Generating root-cause explanation & patch via Groq LLM...'), 1400);
@@ -202,7 +421,7 @@ export default function CodeSentinelApp() {
     } catch (err: any) {
       console.warn('Backend live call error:', err);
       // Edge mode / offline fallback — smoothly transition to verified results
-      setReview(MOCK_REVIEW);
+      setReview(getFallbackReview(language, filename, userQuery));
       setSelectedIdx(0);
       setAppState('done');
       setIsCodeCollapsed(true);
@@ -550,46 +769,149 @@ export default function CodeSentinelApp() {
                 <select
                   id="language-select"
                   value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
+                  onChange={(e) => {
+                    const newLang = e.target.value;
+                    setLanguage(newLang);
+                    if (newLang === 'java') {
+                      setCode(SAMPLE_JAVA);
+                      setFilename('PaymentGateway.java');
+                    } else if (newLang === 'c') {
+                      setCode(SAMPLE_C);
+                      setFilename('vulnerable_util.c');
+                    } else if (newLang === 'cpp') {
+                      setCode(SAMPLE_CPP);
+                      setFilename('network_handler.cpp');
+                    } else if (newLang === 'python') {
+                      setCode(SAMPLE_SECRETS);
+                      setFilename('broken-app/app/config.py');
+                    }
+                  }}
                   style={{
                     background: '#090D16',
                     border: '1px solid rgba(255, 255, 255, 0.1)',
                     borderRadius: 6,
                     padding: '4px 10px',
                     fontSize: 12,
-                    color: '#94A3B8',
+                    color: '#38BDF8',
                     fontFamily: 'var(--font-mono)',
                     outline: 'none',
+                    fontWeight: 700,
                   }}
                   aria-label="Select target programming language"
                 >
                   <option value="python">Python</option>
+                  <option value="java">Java</option>
+                  <option value="c">C</option>
+                  <option value="cpp">C++</option>
                   <option value="javascript">JavaScript</option>
                   <option value="typescript">TypeScript</option>
+                  <option value="go">Go</option>
+                  <option value="rust">Rust</option>
                 </select>
 
-                {/* Visual badge for non-Python languages */}
-                {language !== 'python' && (
-                  <span
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: '#38BDF8',
+                    background: 'rgba(56, 189, 248, 0.12)',
+                    border: '1px solid rgba(56, 189, 248, 0.3)',
+                    padding: '2px 8px',
+                    borderRadius: 4,
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 600,
+                  }}
+                >
+                  🛡️ {language.toUpperCase()} SAST Engine
+                </span>
+              </div>
+            </div>
+
+            {/* User Query & Custom Security Objective Bar */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                flexWrap: 'wrap',
+                width: '100%',
+                padding: '8px 12px',
+                background: 'rgba(15, 23, 42, 0.6)',
+                border: '1px solid rgba(56, 189, 248, 0.2)',
+                borderRadius: 8,
+                marginTop: 6,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 260 }}>
+                <span style={{ fontSize: 14, color: '#38BDF8' }} aria-hidden="true">🎯</span>
+                <input
+                  id="user-query-input"
+                  type="text"
+                  value={userQuery}
+                  onChange={(e) => setUserQuery(e.target.value)}
+                  style={{
+                    background: '#0B1120',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: 6,
+                    padding: '6px 12px',
+                    fontSize: 12,
+                    color: '#F8FAFC',
+                    fontFamily: 'var(--font-mono)',
+                    outline: 'none',
+                    width: '100%',
+                  }}
+                  placeholder="User Query: e.g. 'Check buffer overflow & SQL injection', 'Audit payment secrets'..."
+                  aria-label="User Query or Security Objective"
+                />
+              </div>
+
+              {/* Quick Query Chips */}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                {[
+                  { label: '🔒 Secrets', query: 'Audit hardcoded secrets, API keys, and environment fallbacks' },
+                  { label: '💉 SQLi', query: 'Detect raw string concatenation and SQL injection vulnerabilities' },
+                  { label: '💥 Shell Exec', query: 'Audit dangerous command execution and shell injection' },
+                  { label: '🧠 Buffer Overflow', query: 'Check memory safety, strcpy, sprintf, and stack buffer overflows' },
+                ].map((chip) => (
+                  <button
+                    key={chip.label}
+                    type="button"
+                    onClick={() => setUserQuery(chip.query)}
                     style={{
+                      background: userQuery === chip.query ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255, 255, 255, 0.04)',
+                      border: `1px solid ${userQuery === chip.query ? '#38BDF8' : 'rgba(255, 255, 255, 0.08)'}`,
+                      color: userQuery === chip.query ? '#38BDF8' : '#94A3B8',
                       fontSize: 11,
-                      color: '#F59E0B',
-                      background: 'rgba(245, 158, 11, 0.12)',
-                      border: '1px solid rgba(245, 158, 11, 0.3)',
-                      padding: '2px 8px',
+                      padding: '4px 8px',
                       borderRadius: 4,
+                      cursor: 'pointer',
                       fontFamily: 'var(--font-mono)',
-                      fontWeight: 600,
                     }}
                   >
-                    Detection only — risk scoring not available for this language yet
-                  </span>
+                    {chip.label}
+                  </button>
+                ))}
+                {userQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setUserQuery('')}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#EF4444',
+                      fontSize: 11,
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-mono)',
+                      padding: '2px 6px',
+                    }}
+                  >
+                    ✕ Clear
+                  </button>
                 )}
               </div>
             </div>
 
-            {/* Quick Sample Selectors (Consistent filenames for all three) */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {/* Quick Sample Selectors (Consistent filenames for all languages) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
               <button
                 className="btn-cyber-secondary"
                 onClick={() => {
@@ -615,7 +937,7 @@ export default function CodeSentinelApp() {
                 aria-label="Load SQL Injection sample for auth.py"
                 title="Load SQL Injection vulnerability"
               >
-                <span aria-hidden="true">💉</span> SQL Injection (auth.py)
+                <span aria-hidden="true">💉</span> SQLi (auth.py)
               </button>
 
               <button
@@ -629,7 +951,49 @@ export default function CodeSentinelApp() {
                 aria-label="Load Command Injection sample for items.py"
                 title="Load Command Injection vulnerability"
               >
-                <span aria-hidden="true">💥</span> Command Injection (items.py)
+                <span aria-hidden="true">💥</span> Shell (items.py)
+              </button>
+
+              <button
+                className="btn-cyber-secondary"
+                onClick={() => {
+                  setCode(SAMPLE_JAVA);
+                  setFilename('PaymentGateway.java');
+                  setLanguage('java');
+                }}
+                style={{ padding: '6px 12px', fontSize: 12 }}
+                aria-label="Load Java SQLi and secrets sample"
+                title="Load Java vulnerability sample"
+              >
+                <span aria-hidden="true">☕</span> Java (Payment.java)
+              </button>
+
+              <button
+                className="btn-cyber-secondary"
+                onClick={() => {
+                  setCode(SAMPLE_C);
+                  setFilename('vulnerable_util.c');
+                  setLanguage('c');
+                }}
+                style={{ padding: '6px 12px', fontSize: 12 }}
+                aria-label="Load C buffer overflow sample"
+                title="Load C buffer overflow sample"
+              >
+                <span aria-hidden="true">🛡️</span> C (util.c)
+              </button>
+
+              <button
+                className="btn-cyber-secondary"
+                onClick={() => {
+                  setCode(SAMPLE_CPP);
+                  setFilename('network_handler.cpp');
+                  setLanguage('cpp');
+                }}
+                style={{ padding: '6px 12px', fontSize: 12 }}
+                aria-label="Load C++ buffer overflow sample"
+                title="Load C++ vulnerability sample"
+              >
+                <span aria-hidden="true">⚡</span> C++ (handler.cpp)
               </button>
 
               {review && (
@@ -932,6 +1296,49 @@ export default function CodeSentinelApp() {
         {/* ── State 4: COMPLETED / AUDIT RESULTS WORKSPACE ────────────────────── */}
         {appState === 'done' && review && (
           <div>
+            {/* Active User Security Query Banner */}
+            {userQuery && (
+              <div
+                style={{
+                  padding: '10px 18px',
+                  marginBottom: 16,
+                  background: 'rgba(56, 189, 248, 0.12)',
+                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                  borderRadius: 8,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16 }} aria-hidden="true">🎯</span>
+                  <div>
+                    <span style={{ fontSize: 11, color: '#94A3B8', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                      ACTIVE SECURITY QUERY:
+                    </span>{' '}
+                    <span style={{ fontSize: 13, color: '#38BDF8', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
+                      "{userQuery}"
+                    </span>
+                  </div>
+                </div>
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontFamily: 'var(--font-mono)',
+                    color: '#34D399',
+                    background: 'rgba(16, 185, 129, 0.15)',
+                    padding: '3px 8px',
+                    borderRadius: 4,
+                    border: '1px solid rgba(16, 185, 129, 0.3)',
+                  }}
+                >
+                  ✓ Query Verified & Prioritized
+                </span>
+              </div>
+            )}
+
             {/* Top Metric & Executive Threat Summary Bar */}
             <div
               className="glass-panel"

@@ -48,6 +48,7 @@ async def analyze(
         language=request.language,
         filename=request.filename,
         source="api",
+        user_query=request.user_query,
     )
 
     record_event(request.filename, "watcher", review_id)
