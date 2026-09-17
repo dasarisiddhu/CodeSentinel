@@ -1,0 +1,101 @@
+# .github/workflows/codesentinel.yml
+#
+# STRETCH: GitHub Actions workflow — triggers on every push to main and ships
+# changed Python files to the CodeSentinel backend via the /ingest/webhook API.
+#
+# This is an ALTERNATIVE to the webhook_receiver.py approach: instead of
+# running a persistent receiver and configuring a GitHub webhook, this workflow
+# runs in-process inside GitHub Actions and calls the backend directly.
+#
+# Prerequisites:
+#   1. Add repository secret SENTINEL_URL (e.g. https://your-backend.example.com)
+#   2. Add repository secret SENTINEL_API_KEY if your backend requires auth
+#   3. Ensure your backend is publicly reachable (or use a tunnel for local dev)
+#
+# DEMO NOTE: For a live hackathon pitch, the file_watcher.py approach is more
+# reliable than this workflow (no GH Actions cold-start, no public URL needed).
+# Use this workflow only if you have a deployed backend.
+
+name: CodeSentinel Auto-Review
+
+on:
+  push:
+    branches: [main, master, dev]
+    paths:
+      - "broken-app/app/**/*.py"
+      - "broken-app/app/**/*.js"
+      - "broken-app/app/**/*.ts"
+
+jobs:
+  ship-to-sentinel:
+    name: Ship changed files to CodeSentinel
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2   # need the previous commit to diff
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install shipper dependencies
+        run: pip install requests
+
+      - name: Ship changed files
+        env:
+          SENTINEL_URL: ${{ secrets.SENTINEL_URL }}
+          SENTINEL_API_KEY: ${{ secrets.SENTINEL_API_KEY }}
+        run: |
+          python - <<'PYEOF'
+          import os, subprocess, sys, requests, json
+
+          sentinel_url = os.getenv("SENTINEL_URL", "").rstrip("/")
+          if not sentinel_url:
+              print("SENTINEL_URL secret not set — skipping", flush=True)
+              sys.exit(0)
+
+          endpoint = f"{sentinel_url}/ingest/webhook"
+          api_key  = os.getenv("SENTINEL_API_KEY", "")
+          headers  = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+
+          # Get files changed in the last commit
+          result = subprocess.run(
+              ["git", "diff", "--name-only", "HEAD~1", "HEAD"],
+              capture_output=True, text=True, check=True,
+          )
+          changed = [f.strip() for f in result.stdout.splitlines() if f.strip()]
+
+          WATCHED_EXTS = {".py", ".js", ".ts"}
+          shipped = 0
+
+          for filepath in changed:
+              if not os.path.exists(filepath):
+                  continue  # deleted file
+              ext = os.path.splitext(filepath)[1].lower()
+              if ext not in WATCHED_EXTS:
+                  continue
+
+              with open(filepath, "r", encoding="utf-8", errors="replace") as fh:
+                  code = fh.read()
+
+              payload = {"filename": filepath, "code": code, "source": "github"}
+              try:
+                  resp = requests.post(endpoint, json=payload, headers=headers, timeout=20)
+                  resp.raise_for_status()
+                  review_id = resp.json().get("review_id", "?")
+                  print(f"✓ Shipped {filepath} → review_id={review_id}", flush=True)
+                  shipped += 1
+              except Exception as exc:
+                  print(f"✗ Failed to ship {filepath}: {exc}", flush=True)
+
+          print(f"\nDone: {shipped}/{len(changed)} files shipped to {endpoint}", flush=True)
+          PYEOF
+
+      - name: Summary
+        if: always()
+        run: echo "CodeSentinel review triggered for push to ${{ github.ref_name }}"
