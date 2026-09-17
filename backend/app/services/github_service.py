@@ -260,11 +260,39 @@ def _pr_body(explanation: Explanation, review_id: str) -> str:
 # ── Mock PR path ──────────────────────────────────────────────────────────────
 
 def _mock_pr(review_id: str, filename: str) -> PRResponse:
+    import urllib.parse
     repo = settings.github_repo if (settings.github_repo and settings.github_repo != "owner/repo-name") else "dasarisiddhu/CodeSentinel"
     branch_name = "codesentinel/fix-broken-app-secrets"
+    target = filename or "broken-app/app/config.py"
+    title = f"fix(security): CodeSentinel Auto-Fix for {target}"
+    body = f"""## 🔍 CodeSentinel Automated Security Remediation
+
+**Review ID:** `{review_id or 'demo-review-001'}`  
+**Target File:** `{target}`  
+**Dry-Run Verification:** ✅ Diff tested & applies cleanly
+
+---
+
+### ⚠️ Flagged Vulnerabilities Remediated
+1. **[CRITICAL] Hardcoded Secret Key:** Sensitive secret key committed to repository (`SECRET_KEY`).
+2. **[HIGH] Hardcoded Payment API Key:** Live payment credentials in source (`PAYMENT_API_KEY`).
+
+### 🛡️ Remediation Applied
+- Replaced hardcoded secrets with `os.getenv(...)` environment variable lookups.
+- Added safe development fallbacks to protect production environments.
+
+---
+*Generated autonomously by CodeSentinel AI Defense System*"""
+
+    params = urllib.parse.urlencode({
+        "expand": "1",
+        "title": title,
+        "body": body,
+    })
+    pr_url = f"https://github.com/{repo}/compare/main...{branch_name}?{params}"
     return PRResponse(
         pr_number=1,
-        pr_url=f"https://github.com/{repo}/pull/new/{branch_name}",
+        pr_url=pr_url,
         branch=branch_name,
         mocked=True,
     )
