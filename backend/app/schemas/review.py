@@ -36,6 +36,12 @@ class ReviewResponse(BaseModel):
     findings: list[Finding] = Field(default_factory=list)
     risk_scores: list[RiskScore] = Field(default_factory=list)
     explanations: list[Explanation] = Field(default_factory=list)
+    overall_risk: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Aggregate risk probability (0.0 to 1.0) for the review",
+    )
     created_at: datetime
     completed_at: datetime | None = None
     error: str | None = None
@@ -52,6 +58,13 @@ class IngestRequest(BaseModel):
 
 class IngestResponse(BaseModel):
     review_id: str
+
+
+class LiveFeedEvent(BaseModel):
+    filename: str
+    source: str = "watcher"
+    timestamp: datetime
+    review_id: str | None = None
 
 
 # ── POST /pr/{review_id} ──────────────────────────────────────────────────────

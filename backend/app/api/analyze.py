@@ -12,6 +12,7 @@ import logging
 from fastapi import APIRouter, BackgroundTasks, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.ingest import record_event
 from app.core.database import get_db
 from app.schemas.review import AnalyzeRequest, AnalyzeResponse
 from app.services.orchestrator import run_pipeline
@@ -48,6 +49,8 @@ async def analyze(
         filename=request.filename,
         source="api",
     )
+
+    record_event(request.filename, "watcher", review_id)
 
     logger.info("analyze_submitted", extra={"review_id": review_id, "file_name": request.filename})
     return AnalyzeResponse(review_id=review_id)

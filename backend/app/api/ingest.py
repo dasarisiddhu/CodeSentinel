@@ -15,15 +15,35 @@ from __future__ import annotations
 
 import logging
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.schemas.review import IngestRequest, IngestResponse
+from app.schemas.review import IngestRequest, IngestResponse, LiveFeedEvent
 from app.services.orchestrator import run_pipeline
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# In-memory buffer of recent ingestion events for the live feed indicator
+_recent_events: list[LiveFeedEvent] = []
+_MAX_RECENT_EVENTS = 30
+
+
+def record_event(filename: str, source: str = "watcher", review_id: str | None = None) -> LiveFeedEvent:
+    """Record an ingestion event so the frontend live feed indicator detects it."""
+    event = LiveFeedEvent(
+        filename=filename,
+        source=source,
+        timestamp=datetime.now(timezone.utc),
+        review_id=review_id,
+    )
+    _recent_events.append(event)
+    if len(_recent_events) > _MAX_RECENT_EVENTS:
+        _recent_events.pop(0)
+    return event
 
 
 @router.post(
@@ -49,8 +69,21 @@ async def ingest_webhook(
         source=request.source,
     )
 
+    record_event(request.filename, request.source, review_id)
+
     logger.info(
         "ingest_received",
         extra={"review_id": review_id, "file_name": request.filename, "source": request.source},
     )
     return IngestResponse(review_id=review_id)
+
+
+@router.get(
+    "/ingest/events",
+    response_model=list[LiveFeedEvent],
+    tags=["ingestion"],
+    summary="Poll recent live ingestion events",
+)
+async def get_ingest_events() -> list[LiveFeedEvent]:
+    """Return recent file-watcher / webhook events to illuminate the frontend live indicator."""
+    return list(_recent_events)

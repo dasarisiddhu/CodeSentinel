@@ -43,3 +43,14 @@ Thumbs.db
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Database & SQLite
+*.db
+*.sqlite
+*.sqlite3
+codesentinel.db
+
+# ML Data & Large Models
+ml/data/raw/
+ml/models/*.pkl
+ml/models/*.joblib

@@ -223,6 +223,11 @@ def _build_response(
     completed_at: datetime | None,
     error: str | None = None,
 ) -> ReviewResponse:
+    overall_risk = (
+        round(max((r.risk_probability for r in risk_scores), default=0.0), 3)
+        if risk_scores
+        else 0.0
+    )
     return ReviewResponse(
         review_id=review_id,
         status=status,  # type: ignore[arg-type]
@@ -231,6 +236,7 @@ def _build_response(
         findings=findings,
         risk_scores=risk_scores,
         explanations=explanations,
+        overall_risk=overall_risk,
         created_at=created_at,
         completed_at=completed_at,
         error=error,

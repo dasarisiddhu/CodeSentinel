@@ -24,10 +24,11 @@ const RISK_CONFIG: Record<RiskLevel, { label: string; color: string; glow: strin
 };
 
 export default function RiskGauge({ probability, size = 160 }: RiskGaugeProps) {
-  const level = getRiskLevel(probability);
+  const safeProb = typeof probability === 'number' && !Number.isNaN(probability) ? probability : 0;
+  const level = getRiskLevel(safeProb);
   const { label, color, glow } = RISK_CONFIG[level];
 
-  const pct = Math.max(0, Math.min(1, probability));
+  const pct = Math.max(0, Math.min(1, safeProb));
   const pctDisplay = Math.round(pct * 100);
 
   // Arc geometry — 240° sweep starting at 150° (bottom-left)
