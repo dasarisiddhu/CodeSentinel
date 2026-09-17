@@ -6,13 +6,9 @@ for "developer convenience." This is intentional for the CodeSentinel demo.
 
 import os
 
-# --- VULNERABILITY: Hardcoded secret key (HIGH / security) ---
-# A real developer might do this "just to test" and forget to change it.
-SECRET_KEY = "super-secret-dev-key-do-not-use-in-prod-1234"
-
-# --- VULNERABILITY: Hardcoded API key (HIGH / security) ---
-# Third-party payment service key committed directly in source.
-PAYMENT_API_KEY = "pk_live_abc123xyz_hardcoded_payment_key"
+# Remediated by CodeSentinel: Sensitive secrets moved to environment variables
+SECRET_KEY = os.getenv("SECRET_KEY", "fallback-dev-key-only-for-local-test")
+PAYMENT_API_KEY = os.getenv("PAYMENT_API_KEY", "")
 
 # These are correct — pulled from env with a safe fallback for local dev only.
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///expenses.db")
