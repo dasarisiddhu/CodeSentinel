@@ -58,6 +58,13 @@ class CacheService:
         reviews = [review for _, review in reversed(items)]
         return reviews[:n]
 
+    def get_by_review_id(self, review_id: str) -> ReviewResponse | None:
+        """Lookup review by review_id in memory."""
+        for r_id, review in self._store.values():
+            if r_id == review_id or review.review_id == review_id:
+                return review
+        return None
+
     def size(self) -> int:
         return len(self._store)
 
