@@ -14,7 +14,8 @@ export async function POST(
   }
 
   const targetEmail = body.email?.trim() || 'lead-security@company.internal';
-  const prUrl = body.pr_url || 'https://github.com/dasarisiddhu/CodeSentinel/pull/new/codesentinel/fix-broken-app-secrets';
+  const repo = process.env.GITHUB_REPO || 'dasarisiddhu/CodeSentinel';
+  const prUrl = body.pr_url || `https://github.com/${repo}/pull/1`;
 
   // Try proxying to live backend if running
   try {

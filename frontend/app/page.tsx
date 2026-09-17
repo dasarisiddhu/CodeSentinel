@@ -1705,7 +1705,7 @@ export default function CodeSentinelApp() {
                 <div style={{ padding: '12px 16px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.25)', borderRadius: 6, fontSize: 12, color: '#A7F3D0' }}>
                   A clean remediation pull request is ready to review and merge into <code>main</code>:
                   <div style={{ marginTop: 6, wordBreak: 'break-all' }}>
-                    <strong>{prStatus?.pr_url || 'https://github.com/dasarisiddhu/CodeSentinel/pull/new/codesentinel/fix-broken-app-secrets'}</strong>
+                    <strong>{prStatus?.pr_url || 'https://github.com/dasarisiddhu/CodeSentinel/pull/1'}</strong>
                   </div>
                 </div>
               </div>
