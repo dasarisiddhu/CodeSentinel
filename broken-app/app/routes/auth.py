@@ -77,12 +77,9 @@ def login():
 
     conn = get_db()
     try:
-        # ----------------------------------------------------------------
-        # VULNERABLE: direct string formatting into SQL — never do this.
-        # Parameterized form would be: "SELECT * FROM users WHERE username=?"
-        # ----------------------------------------------------------------
-        query = f"SELECT * FROM users WHERE username='{username}' AND password='{password}'"
-        cur = conn.execute(query)
+        # Parameterized query to prevent SQL Injection
+        query = "SELECT * FROM users WHERE username = ? AND password = ?"
+        cur = conn.execute(query, (username, password))
         user = cur.fetchone()
 
         if not user:
