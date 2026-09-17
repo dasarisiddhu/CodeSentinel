@@ -1,0 +1,72 @@
+{
+  "model_type": "xgboost",
+  "training_time_seconds": 0.63,
+  "label_order": [
+    "low",
+    "medium",
+    "high",
+    "critical"
+  ],
+  "per_class": {
+    "low": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 65
+    },
+    "medium": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "support": 62
+    },
+    "high": {
+      "precision": 0.9118,
+      "recall": 1.0,
+      "f1": 0.9538,
+      "support": 62
+    },
+    "critical": {
+      "precision": 1.0,
+      "recall": 0.9104,
+      "f1": 0.9531,
+      "support": 67
+    }
+  },
+  "macro_avg": {
+    "precision": 0.9779,
+    "recall": 0.9776,
+    "f1": 0.9767
+  },
+  "weighted_avg": {
+    "precision": 0.9786,
+    "recall": 0.9766,
+    "f1": 0.9766
+  },
+  "confusion_matrix": [
+    [
+      65,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      62,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      62,
+      0
+    ],
+    [
+      0,
+      0,
+      6,
+      61
+    ]
+  ]
+}

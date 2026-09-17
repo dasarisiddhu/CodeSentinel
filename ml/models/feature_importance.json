@@ -1,0 +1,82 @@
+[
+  {
+    "feature": "finding_count_medium_severity",
+    "weight": 0.241132
+  },
+  {
+    "feature": "finding_count_high_severity",
+    "weight": 0.179373
+  },
+  {
+    "feature": "hardcoded_secret_count",
+    "weight": 0.130091
+  },
+  {
+    "feature": "function_length_max",
+    "weight": 0.129868
+  },
+  {
+    "feature": "cyclomatic_complexity_max",
+    "weight": 0.110393
+  },
+  {
+    "feature": "finding_count_total",
+    "weight": 0.043924
+  },
+  {
+    "feature": "nesting_depth_max",
+    "weight": 0.043201
+  },
+  {
+    "feature": "dangerous_sink_count",
+    "weight": 0.036859
+  },
+  {
+    "feature": "import_risk_flag",
+    "weight": 0.019747
+  },
+  {
+    "feature": "sloc",
+    "weight": 0.019684
+  },
+  {
+    "feature": "finding_count_bug",
+    "weight": 0.013525
+  },
+  {
+    "feature": "function_length_avg",
+    "weight": 0.007906
+  },
+  {
+    "feature": "cyclomatic_complexity_avg",
+    "weight": 0.007599
+  },
+  {
+    "feature": "finding_count_low_severity",
+    "weight": 0.004036
+  },
+  {
+    "feature": "finding_count_security",
+    "weight": 0.003688
+  },
+  {
+    "feature": "semgrep_finding_count",
+    "weight": 0.002835
+  },
+  {
+    "feature": "maintainability_index",
+    "weight": 0.002447
+  },
+  {
+    "feature": "bandit_finding_count",
+    "weight": 0.002414
+  },
+  {
+    "feature": "finding_count_code_smell",
+    "weight": 0.001277
+  },
+  {
+    "feature": "has_test_file",
+    "weight": 0.0
+  }
+]

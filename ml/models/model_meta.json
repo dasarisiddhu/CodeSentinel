@@ -1,0 +1,31 @@
+{
+  "label_classes": [
+    "low",
+    "medium",
+    "high",
+    "critical"
+  ],
+  "feature_names": [
+    "finding_count_total",
+    "finding_count_bug",
+    "finding_count_security",
+    "finding_count_code_smell",
+    "finding_count_high_severity",
+    "finding_count_medium_severity",
+    "finding_count_low_severity",
+    "bandit_finding_count",
+    "semgrep_finding_count",
+    "cyclomatic_complexity_max",
+    "cyclomatic_complexity_avg",
+    "maintainability_index",
+    "nesting_depth_max",
+    "sloc",
+    "function_length_max",
+    "function_length_avg",
+    "dangerous_sink_count",
+    "hardcoded_secret_count",
+    "import_risk_flag",
+    "has_test_file"
+  ],
+  "model_type": "xgboost"
+}

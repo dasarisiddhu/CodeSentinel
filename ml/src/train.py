@@ -58,7 +58,12 @@ from ml.src.feature_extraction import feature_names
 # Paths
 # ---------------------------------------------------------------------------
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]   # = CodeSentinel/ml/
+REPO_ROOT = Path(__file__).resolve().parents[2]  # = CodeSentinel/
+import sys as _sys
+if str(REPO_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(REPO_ROOT))
+
 TRAIN_CSV = ROOT / "data" / "processed" / "train.csv"
 MODEL_DIR = ROOT / "models"
 EVAL_DIR = ROOT / "eval"
@@ -146,7 +151,6 @@ def _train_model(X_train: np.ndarray, y_train: np.ndarray, num_classes: int):
             "learning_rate": 0.1,
             "subsample": 0.8,
             "colsample_bytree": 0.8,
-            "use_label_encoder": False,
             "eval_metric": "mlogloss",
             "random_state": 42,
             "n_jobs": -1,
