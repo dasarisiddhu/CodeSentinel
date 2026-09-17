@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Review, PRStatus, FindingWithContext } from '@/lib/types';
 import {
   postAnalyze, pollReview, openPR, getDemoReview,
@@ -100,6 +100,7 @@ export default function CodeSentinelApp() {
   const [review, setReview] = useState<Review | null>(null);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [loadingStage, setLoadingStage] = useState('Initializing scan...');
+  const [loadingDuration, setLoadingDuration] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
   const [prStatus, setPrStatus] = useState<PRStatus | null>(null);
   const [isCreatingPr, setIsCreatingPr] = useState(false);
@@ -111,11 +112,27 @@ export default function CodeSentinelApp() {
   const items = review ? joinFindingContext(review) : [];
   const selectedItem = items[selectedIdx] ?? items[0] ?? null;
 
+  // Track elapsed time during loading to auto-suggest Demo Mode if >5s
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    if (appState === 'loading') {
+      setLoadingDuration(0);
+      timer = setInterval(() => {
+        setLoadingDuration((prev) => prev + 1);
+      }, 1000);
+    } else {
+      setLoadingDuration(0);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [appState]);
+
   // Instant Demo Mode Launcher
   const activateDemoMode = async () => {
     setDemoMode(true);
     setAppState('loading');
-    setLoadingStage('Activating Demo Mode: Loading verified findings & dry-run patches...');
+    setLoadingStage('Loading verified demo review & dry-run tested patches...');
     
     setTimeout(async () => {
       try {
@@ -129,7 +146,7 @@ export default function CodeSentinelApp() {
       setSelectedIdx(0);
       setAppState('done');
       setIsCodeCollapsed(true);
-    }, 400);
+    }, 350);
   };
 
   const toggleDemoMode = (enabled: boolean) => {
@@ -178,12 +195,9 @@ export default function CodeSentinelApp() {
       setAppState('done');
       setIsCodeCollapsed(true);
     } catch (err: any) {
-      console.warn('Backend unavailable, activating fallback demo:', err);
-      // Zero-failure demo day safety: seamlessly fall back to verified mock review
-      setReview(MOCK_REVIEW);
-      setSelectedIdx(0);
-      setAppState('done');
-      setIsCodeCollapsed(true);
+      console.warn('Backend live call error:', err);
+      setAppState('error');
+      setErrorMsg(err.message || 'Pipeline analysis encountered an error.');
     }
   };
 
@@ -280,7 +294,7 @@ export default function CodeSentinelApp() {
               border: '1px solid rgba(255, 255, 255, 0.25)',
             }}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
               <path d="m9 12 2 2 4-4" />
             </svg>
@@ -328,11 +342,11 @@ export default function CodeSentinelApp() {
           }}
         >
           <span style={{ color: '#38BDF8', fontWeight: 600 }}>01 SCANNER</span>
-          <span style={{ color: '#475569' }}>→</span>
+          <span style={{ color: '#475569' }} aria-hidden="true">→</span>
           <span style={{ color: '#818CF8', fontWeight: 600 }}>02 ML SCORE</span>
-          <span style={{ color: '#475569' }}>→</span>
+          <span style={{ color: '#475569' }} aria-hidden="true">→</span>
           <span style={{ color: '#A855F7', fontWeight: 600 }}>03 LLM FIX</span>
-          <span style={{ color: '#475569' }}>→</span>
+          <span style={{ color: '#475569' }} aria-hidden="true">→</span>
           <span style={{ color: '#10B981', fontWeight: 600 }}>04 VERIFIER</span>
         </div>
 
@@ -353,12 +367,12 @@ export default function CodeSentinelApp() {
               color: '#34D399',
             }}
           >
-            <span className="pulse-beacon online" />
+            <span className="pulse-beacon online" aria-hidden="true" />
             <span>WATCHER LIVE</span>
           </div>
 
           {/* Interactive Demo Mode Toggle */}
-          <div
+          <button
             onClick={() => toggleDemoMode(!demoMode)}
             style={{
               display: 'flex',
@@ -371,6 +385,7 @@ export default function CodeSentinelApp() {
               cursor: 'pointer',
               transition: 'all 0.2s ease',
             }}
+            aria-label="Toggle Demo Mode for instant cached results"
             title="Click to instantly toggle pre-cached demo data"
           >
             <span style={{ fontSize: 11, color: demoMode ? '#38BDF8' : '#94A3B8', fontWeight: 700 }}>
@@ -400,7 +415,7 @@ export default function CodeSentinelApp() {
                 }}
               />
             </div>
-          </div>
+          </button>
         </div>
       </header>
 
@@ -429,17 +444,20 @@ export default function CodeSentinelApp() {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} aria-hidden="true">
                 <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#EF4444' }} />
                 <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#EAB308' }} />
                 <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#10B981' }} />
               </div>
-              <span style={{ fontSize: 13, fontWeight: 600, color: '#94A3B8', fontFamily: 'var(--font-mono)' }}>
-                TARGET FILE:
-              </span>
+
+              {/* Explicit Label without bare asterisks */}
+              <label htmlFor="filename-input" style={{ fontSize: 13, fontWeight: 600, color: '#94A3B8', fontFamily: 'var(--font-mono)' }}>
+                TARGET FILE
+              </label>
 
               {/* Target File Input */}
               <input
+                id="filename-input"
                 type="text"
                 value={filename}
                 onChange={(e) => setFilename(e.target.value)}
@@ -455,41 +473,66 @@ export default function CodeSentinelApp() {
                   width: 210,
                 }}
                 placeholder="broken-app/app/config.py"
+                aria-label="Target file path in repository"
               />
 
               {/* Language Selector */}
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                style={{
-                  background: '#090D16',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: 6,
-                  padding: '4px 10px',
-                  fontSize: 12,
-                  color: '#94A3B8',
-                  fontFamily: 'var(--font-mono)',
-                  outline: 'none',
-                }}
-              >
-                <option value="python">Python</option>
-                <option value="javascript">JavaScript</option>
-                <option value="typescript">TypeScript</option>
-              </select>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <select
+                  id="language-select"
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                  style={{
+                    background: '#090D16',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: 6,
+                    padding: '4px 10px',
+                    fontSize: 12,
+                    color: '#94A3B8',
+                    fontFamily: 'var(--font-mono)',
+                    outline: 'none',
+                  }}
+                  aria-label="Select target programming language"
+                >
+                  <option value="python">Python</option>
+                  <option value="javascript">JavaScript</option>
+                  <option value="typescript">TypeScript</option>
+                </select>
+
+                {/* Visual badge for non-Python languages */}
+                {language !== 'python' && (
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: '#F59E0B',
+                      background: 'rgba(245, 158, 11, 0.12)',
+                      border: '1px solid rgba(245, 158, 11, 0.3)',
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      fontFamily: 'var(--font-mono)',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Detection only — risk scoring not available for this language yet
+                  </span>
+                )}
+              </div>
             </div>
 
-            {/* Quick Sample Selectors */}
+            {/* Quick Sample Selectors (Consistent filenames for all three) */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <button
                 className="btn-cyber-secondary"
                 onClick={() => {
                   setCode(SAMPLE_SECRETS);
                   setFilename('broken-app/app/config.py');
+                  setLanguage('python');
                 }}
                 style={{ padding: '6px 12px', fontSize: 12 }}
+                aria-label="Load hardcoded secrets sample for config.py"
                 title="Load hardcoded secret keys"
               >
-                ⚡ Secrets (config.py)
+                <span aria-hidden="true">⚡</span> Secrets (config.py)
               </button>
 
               <button
@@ -497,11 +540,13 @@ export default function CodeSentinelApp() {
                 onClick={() => {
                   setCode(SAMPLE_SQLI);
                   setFilename('broken-app/app/routes/auth.py');
+                  setLanguage('python');
                 }}
                 style={{ padding: '6px 12px', fontSize: 12 }}
+                aria-label="Load SQL Injection sample for auth.py"
                 title="Load SQL Injection vulnerability"
               >
-                💉 SQL Injection (auth.py)
+                <span aria-hidden="true">💉</span> SQL Injection (auth.py)
               </button>
 
               <button
@@ -509,11 +554,13 @@ export default function CodeSentinelApp() {
                 onClick={() => {
                   setCode(SAMPLE_CMD_INJECTION);
                   setFilename('broken-app/app/routes/items.py');
+                  setLanguage('python');
                 }}
                 style={{ padding: '6px 12px', fontSize: 12 }}
+                aria-label="Load Command Injection sample for items.py"
                 title="Load Command Injection vulnerability"
               >
-                💥 Command Injection
+                <span aria-hidden="true">💥</span> Command Injection (items.py)
               </button>
 
               {review && (
@@ -521,29 +568,35 @@ export default function CodeSentinelApp() {
                   className="btn-cyber-outline"
                   onClick={() => setIsCodeCollapsed(!isCodeCollapsed)}
                   style={{ fontSize: 12 }}
+                  aria-label={isCodeCollapsed ? 'Expand code editor' : 'Collapse code editor'}
                 >
                   {isCodeCollapsed ? '▼ Expand Editor' : '▲ Collapse Editor'}
                 </button>
               )}
 
-              {/* Primary Analyze Action */}
+              {/* Primary Analyze Action — Distinct Labels and Subtexts */}
               <button
                 id="analyze-button"
                 className="btn-cyber-primary"
                 disabled={appState === 'loading' || !code.trim()}
                 onClick={handleAnalyze}
+                aria-label={demoMode ? 'Run Demo Review with cached results' : 'Run Live Pipeline Scan on backend'}
+                title={demoMode ? 'Demo Mode — instant, cached results' : 'Live Scan — runs the real pipeline, ~2-5 seconds'}
               >
                 {appState === 'loading' ? (
                   <>
-                    <span className="animate-spin-fast">⟳</span>
+                    <span className="animate-spin-fast" aria-hidden="true">⟳</span>
                     <span>Analyzing...</span>
+                  </>
+                ) : demoMode ? (
+                  <>
+                    <span aria-hidden="true">⚡</span>
+                    <span>Run Demo Review (Instant, Cached)</span>
                   </>
                 ) : (
                   <>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <polygon points="5 3 19 12 5 21 5 3" />
-                    </svg>
-                    <span>Run Security Review</span>
+                    <span aria-hidden="true">🔍</span>
+                    <span>Run Live Pipeline Scan (~2–5s)</span>
                   </>
                 )}
               </button>
@@ -569,6 +622,7 @@ export default function CodeSentinelApp() {
                   resize: 'vertical',
                 }}
                 placeholder="Paste Python or target code here..."
+                aria-label="Source code payload input"
               />
             </div>
           )}
@@ -602,8 +656,8 @@ export default function CodeSentinelApp() {
                   marginBottom: 16,
                 }}
               >
-                <span className="pulse-beacon online" />
-                TRI-AGENT VULNERABILITY SHIELD READY
+                <span className="pulse-beacon online" aria-hidden="true" />
+                <span>TRI-AGENT VULNERABILITY SHIELD READY</span>
               </div>
               <h1 style={{ fontSize: 36, fontWeight: 800, color: '#FFFFFF', letterSpacing: '-0.03em', marginBottom: 12 }}>
                 High-Confidence AI Vulnerability Detection & Verified Patches
@@ -611,62 +665,91 @@ export default function CodeSentinelApp() {
               <p style={{ fontSize: 16, color: '#94A3B8', maxWidth: 740, lineHeight: 1.6 }}>
                 Static scanners find syntax bugs without context. LLMs hallucinate false vulnerabilities. 
                 CodeSentinel unifies deterministic AST detection, an empirical XGBoost risk model, and 
-                patch-simulation to ensure zero hallucination and 100% verified remediation.
+                patch simulation to ensure zero hallucination — every fix is dry-run tested before it reaches a PR.
               </p>
             </div>
 
             {/* 3 Interactive Core Cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, width: '100%', maxWidth: 1100 }}>
               <div className="glass-card" style={{ padding: '24px', textAlign: 'left' }}>
-                <div style={{ fontSize: 24, marginBottom: 12 }}>🔍</div>
+                <div style={{ fontSize: 24, marginBottom: 12 }} aria-hidden="true">🔍</div>
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: '#FFFFFF', marginBottom: 8 }}>
                   01. Deterministic Ground Truth
                 </h3>
                 <p style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.6 }}>
-                  Scans code using Semgrep, Bandit, and Radon. No LLM hallucinated CVEs — only verified AST issues trigger the pipeline.
+                  Scans code using Semgrep, Bandit, and Radon. Zero hallucinated vulnerabilities — only verified AST findings trigger the pipeline.
                 </p>
               </div>
 
               <div className="glass-card" style={{ padding: '24px', textAlign: 'left' }}>
-                <div style={{ fontSize: 24, marginBottom: 12 }}>🧠</div>
+                <div style={{ fontSize: 24, marginBottom: 12 }} aria-hidden="true">🧠</div>
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: '#FFFFFF', marginBottom: 8 }}>
                   02. 20-Feature XGBoost Risk Model
                 </h3>
                 <p style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.6 }}>
-                  Evaluates cyclomatic complexity, nesting depth, dangerous sinks, and hardcoded secrets to calculate mathematical exploit probabilities.
+                  Evaluates cyclomatic complexity, nesting depth, dangerous sinks, and secret patterns to calculate empirical exploit probabilities.
                 </p>
               </div>
 
               <div className="glass-card" style={{ padding: '24px', textAlign: 'left' }}>
-                <div style={{ fontSize: 24, marginBottom: 12 }}>🛡️</div>
+                <div style={{ fontSize: 24, marginBottom: 12 }} aria-hidden="true">🛡️</div>
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: '#FFFFFF', marginBottom: 8 }}>
                   03. Dry-Run Patch Verification
                 </h3>
                 <p style={{ fontSize: 13, color: '#94A3B8', lineHeight: 1.6 }}>
-                  Every Groq LLM-suggested fix is tested via unified diff dry-run against the original file to guarantee clean application before PR creation.
+                  Every Groq LLM-suggested fix is dry-run tested via unified diff against the original source to confirm it applies cleanly before PR creation.
                 </p>
               </div>
             </div>
 
-            {/* Hero Quick Launch Buttons */}
+            {/* Hero Quick Launch Buttons — Two Distinct CTAs with Subtexts */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
               <button
                 onClick={activateDemoMode}
                 className="btn-cyber-primary"
-                style={{ padding: '14px 28px', fontSize: 15, borderRadius: 12, background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', boxShadow: '0 0 24px rgba(16, 185, 129, 0.4)' }}
+                style={{
+                  padding: '12px 24px',
+                  borderRadius: 12,
+                  background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                  boxShadow: '0 0 24px rgba(16, 185, 129, 0.4)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 3,
+                }}
+                aria-label="Launch Demo Mode with instant pre-cached results"
               >
-                <span>⚡ Launch Demo Mode (Instant Pitch)</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 14 }}>
+                  <span aria-hidden="true">⚡</span>
+                  <span>Demo Mode — Instant Cached Review</span>
+                </div>
+                <span style={{ fontSize: 11, opacity: 0.85, fontWeight: 500 }}>
+                  Pre-verified findings & patches · Zero network delay
+                </span>
               </button>
 
               <button
                 onClick={handleAnalyze}
-                className="btn-cyber-primary"
-                style={{ padding: '14px 28px', fontSize: 15, borderRadius: 12 }}
+                className="btn-cyber-secondary"
+                style={{
+                  padding: '12px 24px',
+                  borderRadius: 12,
+                  border: '1px solid rgba(56, 189, 248, 0.35)',
+                  background: 'rgba(14, 165, 233, 0.1)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 3,
+                }}
+                aria-label="Run Live Pipeline Scan on backend server"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <polygon points="5 3 19 12 5 21 5 3" />
-                </svg>
-                <span>Run Live Pipeline Scan</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 14, color: '#38BDF8' }}>
+                  <span aria-hidden="true">🔍</span>
+                  <span>Live Scan — Runs Real Pipeline</span>
+                </div>
+                <span style={{ fontSize: 11, color: '#94A3B8', fontWeight: 500 }}>
+                  Executes AST tools, ML scoring & Groq (~2–5s)
+                </span>
               </button>
             </div>
           </div>
@@ -694,6 +777,7 @@ export default function CodeSentinelApp() {
                 borderTopColor: '#38BDF8',
                 animation: 'spin 1s linear infinite',
               }}
+              aria-hidden="true"
             />
             <div>
               <h2 style={{ fontSize: 20, fontWeight: 700, color: '#FFFFFF', marginBottom: 8 }}>
@@ -714,6 +798,42 @@ export default function CodeSentinelApp() {
                 }}
               />
             </div>
+
+            {/* Task 7: Visible Auto-Suggest Fallback if loading exceeds 5 seconds */}
+            {loadingDuration >= 5 && (
+              <div
+                style={{
+                  background: 'rgba(245, 158, 11, 0.12)',
+                  border: '1px solid rgba(245, 158, 11, 0.35)',
+                  borderRadius: 8,
+                  padding: '14px 20px',
+                  maxWidth: 520,
+                  width: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 10,
+                  marginTop: 12,
+                }}
+              >
+                <div style={{ fontSize: 13, color: '#F59E0B', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span aria-hidden="true">⚠️</span>
+                  <span>Live scan is taking longer than usual ({loadingDuration}s)</span>
+                </div>
+                <p style={{ fontSize: 12, color: '#CBD5E1', margin: 0, textAlign: 'center', lineHeight: 1.5 }}>
+                  The backend may be initializing or awaiting external APIs. You can switch to instant Demo Mode to view pre-verified findings immediately.
+                </p>
+                <button
+                  onClick={activateDemoMode}
+                  className="btn-cyber-primary"
+                  style={{ padding: '8px 16px', fontSize: 12, borderRadius: 6, background: '#D97706' }}
+                  aria-label="Switch to instant Demo Mode"
+                >
+                  <span aria-hidden="true">⚡</span>
+                  <span>Switch to Demo Mode (Instant)</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -728,13 +848,14 @@ export default function CodeSentinelApp() {
               textAlign: 'center',
             }}
           >
-            <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
+            <div style={{ fontSize: 32, marginBottom: 12 }} aria-hidden="true">⚠️</div>
             <h3 style={{ fontSize: 18, fontWeight: 700, color: '#EF4444', marginBottom: 8 }}>
               Analysis Pipeline Error
             </h3>
             <p style={{ fontSize: 14, color: '#94A3B8', marginBottom: 20 }}>{errorMsg}</p>
-            <button className="btn-cyber-primary" onClick={activateDemoMode}>
-              Switch to Verified Demo Review
+            <button className="btn-cyber-primary" onClick={activateDemoMode} aria-label="Switch to verified demo review">
+              <span aria-hidden="true">⚡</span>
+              <span>Switch to Verified Demo Review</span>
             </button>
           </div>
         )}
@@ -813,15 +934,15 @@ export default function CodeSentinelApp() {
                 </div>
               </div>
 
-              {/* Diff Verification Badge */}
+              {/* Diff Verification Badge (Softened, Accurate Copy) */}
               <div>
                 <div style={{ fontSize: 11, color: '#64748B', fontFamily: 'var(--font-mono)', fontWeight: 700, letterSpacing: '0.05em' }}>
                   PATCH VERIFICATION
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                  <span style={{ color: '#10B981', fontSize: 16 }}>🛡️</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#34D399', fontFamily: 'var(--font-mono)' }}>
-                    DRY-RUN CERTIFIED (100%)
+                  <span style={{ color: '#10B981', fontSize: 16 }} aria-hidden="true">🛡️</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#34D399', fontFamily: 'var(--font-mono)' }}>
+                    DRY-RUN TESTED (Applies Cleanly)
                   </span>
                 </div>
               </div>
@@ -850,6 +971,9 @@ export default function CodeSentinelApp() {
                         background: isSelected ? 'rgba(25, 36, 60, 0.95)' : 'rgba(13, 19, 34, 0.65)',
                         boxShadow: isSelected ? `0 0 16px ${SEV_COLORS[s]}25` : 'none',
                       }}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Finding ${idx + 1}: ${item.finding.message}`}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                         <span
@@ -875,10 +999,12 @@ export default function CodeSentinelApp() {
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: '#64748B', fontFamily: 'var(--font-mono)' }}>
                         <span>{item.finding.rule_id.split('.').pop()}</span>
-                        {item.risk && (
+                        {item.risk ? (
                           <span style={{ color: SEV_COLORS[s], fontWeight: 700 }}>
                             Risk: {Math.round(item.risk.risk_probability * 100)}%
                           </span>
+                        ) : (
+                          <span style={{ color: '#64748B', fontSize: 10 }}>Detection only</span>
                         )}
                       </div>
                     </div>
@@ -903,7 +1029,7 @@ export default function CodeSentinelApp() {
                           color: SEV_COLORS[(selectedItem.risk?.predicted_severity ?? selectedItem.finding.tool_severity) as Sev],
                         }}
                       >
-                        {selectedItem.risk?.predicted_severity?.toUpperCase() || 'HIGH'} SEVERITY
+                        {selectedItem.risk?.predicted_severity?.toUpperCase() || selectedItem.finding.tool_severity.toUpperCase()} SEVERITY
                       </span>
                       <span style={{ fontSize: 12, color: '#94A3B8', fontFamily: 'var(--font-mono)' }}>
                         {selectedItem.finding.file}:{selectedItem.finding.line_start}
@@ -916,8 +1042,9 @@ export default function CodeSentinelApp() {
 
                   {/* Section 1: Flagged Code Snippet */}
                   <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#94A3B8', fontFamily: 'var(--font-mono)', marginBottom: 8 }}>
-                      ⚠️ FLAGGED VULNERABLE CODE
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#94A3B8', fontFamily: 'var(--font-mono)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span aria-hidden="true">⚠️</span>
+                      <span>FLAGGED VULNERABLE CODE</span>
                     </div>
                     <div className="code-editor-box" style={{ padding: '16px', overflowX: 'auto' }}>
                       <pre style={{ margin: 0, fontSize: 13, color: '#F87171', fontFamily: 'var(--font-mono)', lineHeight: 1.6 }}>
@@ -930,8 +1057,9 @@ export default function CodeSentinelApp() {
                   {selectedItem.explanation && (
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                       <div className="glass-card" style={{ padding: '16px' }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#38BDF8', fontFamily: 'var(--font-mono)', marginBottom: 6 }}>
-                          📖 WHAT THIS MEANS
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#38BDF8', fontFamily: 'var(--font-mono)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span aria-hidden="true">📖</span>
+                          <span>WHAT THIS MEANS</span>
                         </div>
                         <p style={{ fontSize: 13, color: '#CBD5E1', lineHeight: 1.6 }}>
                           {selectedItem.explanation.plain_english_explanation}
@@ -939,8 +1067,9 @@ export default function CodeSentinelApp() {
                       </div>
 
                       <div className="glass-card" style={{ padding: '16px' }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#A855F7', fontFamily: 'var(--font-mono)', marginBottom: 6 }}>
-                          🧠 WHY THIS SEVERITY?
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#A855F7', fontFamily: 'var(--font-mono)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span aria-hidden="true">🧠</span>
+                          <span>WHY THIS SEVERITY?</span>
                         </div>
                         <p style={{ fontSize: 13, color: '#CBD5E1', lineHeight: 1.6 }}>
                           {selectedItem.explanation.severity_rationale || 'High exploitability due to external surface exposure.'}
@@ -952,8 +1081,9 @@ export default function CodeSentinelApp() {
                   {/* Section 3: ML Feature Importance Weights */}
                   {selectedItem.risk?.top_contributing_features && (
                     <div className="glass-card" style={{ padding: '16px' }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#818CF8', fontFamily: 'var(--font-mono)', marginBottom: 12 }}>
-                        🤖 XGBOOST RISK FACTORS
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#818CF8', fontFamily: 'var(--font-mono)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span aria-hidden="true">🤖</span>
+                        <span>XGBOOST RISK FACTORS</span>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                         {selectedItem.risk.top_contributing_features.map((f) => (
@@ -975,8 +1105,9 @@ export default function CodeSentinelApp() {
                   {selectedItem.explanation?.fix_diff && (
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#10B981', fontFamily: 'var(--font-mono)' }}>
-                          💡 VERIFIED REMEDIATION PATCH (DRY-RUN CERTIFIED)
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#10B981', fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span aria-hidden="true">💡</span>
+                          <span>REMEDIATION PATCH (DRY-RUN TESTED)</span>
                         </div>
                         <span
                           style={{
@@ -990,7 +1121,7 @@ export default function CodeSentinelApp() {
                             border: '1px solid rgba(16, 185, 129, 0.3)',
                           }}
                         >
-                          ✓ PATCH APPLIES CLEANLY
+                          ✓ DIFF APPLIES CLEANLY
                         </span>
                       </div>
                       <div className="code-editor-box" style={{ padding: '16px', overflowX: 'auto' }}>
@@ -1044,13 +1175,16 @@ export default function CodeSentinelApp() {
                           outline: 'none',
                           width: 220,
                         }}
+                        aria-label="Code owner email address"
                       />
                       <button
                         className="btn-cyber-secondary"
                         onClick={handleNotify}
                         disabled={isNotifying}
+                        aria-label="Dispatch security alert to code owner"
                       >
-                        {isNotifying ? 'Dispatching...' : '✉️ Notify Code Owner'}
+                        <span aria-hidden="true">✉️</span>
+                        <span>{isNotifying ? 'Dispatching...' : 'Notify Code Owner'}</span>
                       </button>
                       {notifyStatus && (
                         <span style={{ fontSize: 12, color: '#34D399', fontFamily: 'var(--font-mono)' }}>
@@ -1065,8 +1199,10 @@ export default function CodeSentinelApp() {
                         className="btn-cyber-primary"
                         onClick={handleOpenPR}
                         disabled={isCreatingPr}
+                        aria-label="Create GitHub Pull Request with fix"
                       >
-                        {isCreatingPr ? 'Opening PR...' : '🚀 Open GitHub PR With Fix'}
+                        <span aria-hidden="true">🚀</span>
+                        <span>{isCreatingPr ? 'Opening PR...' : 'Open GitHub PR With Fix'}</span>
                       </button>
                       {prStatus?.pr_url && (
                         <a
@@ -1086,6 +1222,7 @@ export default function CodeSentinelApp() {
                             padding: '8px 14px',
                             fontWeight: 700,
                           }}
+                          aria-label={`View Pull Request #${prStatus.pr_number || 1} on GitHub`}
                         >
                           <span>View PR #{prStatus.pr_number || 1} on GitHub ↗</span>
                         </a>

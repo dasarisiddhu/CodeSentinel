@@ -118,10 +118,17 @@ async def run_pipeline(
             cache.put(chash, review_id, response)
             return review_id, response
 
-        # ── Stage 2: ML Risk Scoring ──────────────────────────────────────────
-        with log_stage("ml_scoring", review_id=review_id) as ctx:
-            risk_scores = await ml_agent.score_findings(findings, code, language)
-            ctx["finding_count"] = len(risk_scores)
+        # ── Stage 2: ML Risk Scoring (Python only; VUDENC model) ─────────────
+        if language.lower() == "python":
+            with log_stage("ml_scoring", review_id=review_id) as ctx:
+                risk_scores = await ml_agent.score_findings(findings, code, language)
+                ctx["finding_count"] = len(risk_scores)
+        else:
+            logger.info(
+                "skipping_ml_scoring_non_python",
+                extra={"review_id": review_id, "language": language},
+            )
+            risk_scores = []
 
         # ── Stage 3: LLM Explanation & Fix ───────────────────────────────────
         with log_stage("llm_explanation", review_id=review_id) as ctx:

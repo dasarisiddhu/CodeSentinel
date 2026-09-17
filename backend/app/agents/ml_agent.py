@@ -62,7 +62,9 @@ async def score_findings(
     if not findings:
         return []
 
-    # ── Attempt Real ML Inference ─────────────────────────────────────────────
+    if language.lower() != "python":
+        logger.info("ml_agent_skipped_non_python", extra={"language": language})
+        return []
     if _risk_model_module is not None:
         try:
             finding_dicts = [f.model_dump() for f in findings]
