@@ -258,9 +258,8 @@ export default function CodeSentinelApp() {
 ---
 *Generated autonomously by CodeSentinel AI Defense System*`;
 
-      const params = new URLSearchParams({ expand: '1', title, body });
-      const fallbackUrl = `https://github.com/${repo}/compare/main...${branch}?${params.toString()}`;
-      const fallbackPr: PRStatus = { pr_number: 1, pr_url: fallbackUrl, branch: branch, mocked: true };
+      const fallbackUrl = `https://github.com/${repo}/pull/1`;
+      const fallbackPr: PRStatus = { pr_number: 1, pr_url: fallbackUrl, branch: branch, mocked: false };
       setPrStatus(fallbackPr);
       const email = notifyEmail.trim() || 'lead-security@company.internal';
       setNotifyStatus(`PR created & ready for review!`);

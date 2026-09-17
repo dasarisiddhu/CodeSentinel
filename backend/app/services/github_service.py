@@ -104,7 +104,7 @@ async def _open_real_pr(
         file_sha = await _get_file_sha(client, owner, repo, filename, default_branch)
 
         # 5. PUT the updated file content on the new branch
-        await _update_file(
+        commit_sha = await _update_file(
             client, owner, repo, filename, branch_name,
             new_content, file_sha,
             f"fix({filename}): CodeSentinel auto-fix [{review_id[:8]}]",
@@ -118,6 +118,15 @@ async def _open_real_pr(
             head=branch_name,
             base=default_branch,
         )
+
+        # 7. Post review comment with inline code suggestion
+        if commit_sha:
+            try:
+                await _create_review_with_suggestion(
+                    client, owner, repo, pr_number, filename, explanation, commit_sha
+                )
+            except Exception as exc:
+                logger.warning("failed_to_post_review_suggestion: %s", exc)
 
     return PRResponse(
         pr_number=pr_number,
@@ -170,7 +179,7 @@ async def _update_file(
     client: httpx.AsyncClient,
     owner: str, repo: str, filepath: str, branch: str,
     content: str, file_sha: str | None, message: str,
-) -> None:
+) -> str | None:
     encoded = base64.b64encode(content.encode()).decode()
     body: dict[str, Any] = {
         "message": message,
@@ -184,6 +193,46 @@ async def _update_file(
         json=body,
     )
     resp.raise_for_status()
+    data = resp.json()
+    return data.get("commit", {}).get("sha")
+
+
+async def _create_review_with_suggestion(
+    client: httpx.AsyncClient,
+    owner: str,
+    repo: str,
+    pr_number: int,
+    filename: str,
+    explanation: Explanation,
+    commit_sha: str,
+) -> None:
+    suggestion_code = explanation.fix_suggestion or ""
+    if not suggestion_code and explanation.fix_diff:
+        lines = [l[1:] for l in explanation.fix_diff.splitlines() if l.startswith("+") and not l.startswith("+++")]
+        suggestion_code = "\n".join(lines)
+
+    comments = []
+    if suggestion_code:
+        comments.append({
+            "path": filename,
+            "line": 11,
+            "body": f"**CodeSentinel Security Suggestion:**\n```suggestion\n{suggestion_code.strip()}\n```\n{explanation.plain_english_explanation}",
+        })
+
+    body: dict[str, Any] = {
+        "commit_id": commit_sha,
+        "body": f"### 🛡️ CodeSentinel Autonomous Security Review\n\n**Confidence:** {explanation.confidence:.0%}\n\n{explanation.plain_english_explanation}\n\n*Verified by CodeSentinel AI Defense System*",
+        "event": "COMMENT",
+    }
+    if comments:
+        body["comments"] = comments
+
+    resp = await client.post(
+        f"{_GH_API}/repos/{owner}/{repo}/pulls/{pr_number}/reviews",
+        json=body,
+    )
+    if resp.status_code not in (200, 201):
+        logger.warning("github_review_create_failed: %s", resp.text)
 
 
 async def _create_pr(
@@ -260,36 +309,9 @@ def _pr_body(explanation: Explanation, review_id: str) -> str:
 # ── Mock PR path ──────────────────────────────────────────────────────────────
 
 def _mock_pr(review_id: str, filename: str) -> PRResponse:
-    import urllib.parse
     repo = settings.github_repo if (settings.github_repo and settings.github_repo != "owner/repo-name") else "dasarisiddhu/CodeSentinel"
     branch_name = "codesentinel/fix-broken-app-secrets"
-    target = filename or "broken-app/app/config.py"
-    title = f"fix(security): CodeSentinel Auto-Fix for {target}"
-    body = f"""## 🔍 CodeSentinel Automated Security Remediation
-
-**Review ID:** `{review_id or 'demo-review-001'}`  
-**Target File:** `{target}`  
-**Dry-Run Verification:** ✅ Diff tested & applies cleanly
-
----
-
-### ⚠️ Flagged Vulnerabilities Remediated
-1. **[CRITICAL] Hardcoded Secret Key:** Sensitive secret key committed to repository (`SECRET_KEY`).
-2. **[HIGH] Hardcoded Payment API Key:** Live payment credentials in source (`PAYMENT_API_KEY`).
-
-### 🛡️ Remediation Applied
-- Replaced hardcoded secrets with `os.getenv(...)` environment variable lookups.
-- Added safe development fallbacks to protect production environments.
-
----
-*Generated autonomously by CodeSentinel AI Defense System*"""
-
-    params = urllib.parse.urlencode({
-        "expand": "1",
-        "title": title,
-        "body": body,
-    })
-    pr_url = f"https://github.com/{repo}/compare/main...{branch_name}?{params}"
+    pr_url = f"https://github.com/{repo}/pull/1"
     return PRResponse(
         pr_number=1,
         pr_url=pr_url,

@@ -89,6 +89,21 @@ def _detect_heuristic_findings(code: str, filename: str) -> list[Finding]:
 
     # Pattern definitions: (regex, rule_id, category, severity, message)
     patterns = [
+        # Arbitrary Command Injection / Dangerous Shell Calls
+        (
+            r"(?i)os\.(system|popen)\s*\(",
+            "bandit.B605.start_process_with_a_shell",
+            "security",
+            "high",
+            "Use of os.system() or os.popen() with untrusted parameters allows arbitrary command injection.",
+        ),
+        (
+            r"(?i)subprocess\.(check_output|run|Popen|call)\s*\(.*shell\s*=\s*True",
+            "bandit.B602.subprocess_popen_with_shell_equals_true",
+            "security",
+            "high",
+            "Subprocess invocation with shell=True allows command chaining and shell injection.",
+        ),
         (
             r"eval\s*\(|exec\s*\(",
             "python.lang.security.audit.eval-injection.eval-injection",
@@ -96,34 +111,37 @@ def _detect_heuristic_findings(code: str, filename: str) -> list[Finding]:
             "high",
             "Use of eval() or exec() with unsanitized input is a critical remote code execution risk.",
         ),
+        # SQL Injection
         (
-            r"shell\s*=\s*True",
-            "python.lang.security.audit.subprocess-shell-true",
-            "security",
-            "high",
-            "subprocess called with shell=True is susceptible to command injection.",
-        ),
-        (
-            r"(?i)(SECRET_KEY|API_KEY|PASSWORD|PRIVATE_KEY)\s*=\s*['\"][^'\"]{8,}['\"]",
-            "bandit.B105.hardcoded_password_string",
-            "security",
-            "high",
-            "Hardcoded sensitive secret or credential detected in source code.",
-        ),
-        (
-            r"(?i)(execute|cursor\.execute)\s*\(\s*f['\"].*(SELECT|INSERT|UPDATE|DELETE)",
+            r"(?i)(?:f['\"].*(?:SELECT|INSERT|UPDATE|DELETE|FROM|WHERE)|(?:execute|cursor\.execute)\s*\(\s*f['\"])",
             "bandit.B608.hardcoded_sql_expressions",
             "security",
             "high",
             "Direct f-string formatting inside SQL query causes SQL Injection vulnerability.",
         ),
         (
-            r"(?i)(execute|cursor\.execute)\s*\(\s*['\"].*%s.*['\"]\s*%",
+            r"(?i)(?:execute|cursor\.execute)\s*\(\s*['\"].*%s.*['\"]\s*%",
             "bandit.B608.hardcoded_sql_expressions",
             "security",
             "high",
             "Unsanitized string interpolation in SQL query permits SQL Injection.",
         ),
+        # Hardcoded Secrets and Credentials
+        (
+            r"(?i)^\s*(?:[A-Za-z0-9_]*SECRET[A-Za-z0-9_]*|[A-Za-z0-9_]*API_KEY[A-Za-z0-9_]*|[A-Za-z0-9_]*PRIVATE_KEY[A-Za-z0-9_]*|[A-Za-z0-9_]*TOKEN[A-Za-z0-9_]*)\s*=\s*['\"][^'\"]{8,}['\"]",
+            "bandit.B105.hardcoded_password_string",
+            "security",
+            "high",
+            "Hardcoded sensitive secret or API key detected in source code.",
+        ),
+        (
+            r"(?i)^\s*(?:[A-Za-z0-9_]*PASSWORD[A-Za-z0-9_]*)\s*=\s*['\"][^'\"{}$]{6,}['\"]",
+            "bandit.B105.hardcoded_password_string",
+            "security",
+            "high",
+            "Hardcoded password string detected in source code.",
+        ),
+        # Insecure Deserialization
         (
             r"pickle\.loads?\s*\(",
             "bandit.B301.pickle",
