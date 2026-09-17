@@ -216,6 +216,9 @@ export default function CodeSentinelApp() {
     try {
       const res = await openPR(review.review_id);
       setPrStatus(res);
+      if (typeof window !== 'undefined' && res.pr_url) {
+        window.open(res.pr_url, '_blank');
+      }
 
       // Auto-dispatch email alert for this PR
       const email = notifyEmail.trim() || 'lead-security@company.internal';
@@ -227,13 +230,13 @@ export default function CodeSentinelApp() {
         });
         if (notifyRes.ok) {
           const data = await notifyRes.json();
-          setNotifyStatus(`PR #${res.pr_number || 1} created & alert dispatched to ${email}!`);
+          setNotifyStatus(`PR #${res.pr_number || 1} live on GitHub! Alert dispatched to ${email}`);
           if (data.mailto_url) setMailtoUrl(data.mailto_url);
         } else {
-          setNotifyStatus(`PR #${res.pr_number || 1} ready on GitHub!`);
+          setNotifyStatus(`PR #${res.pr_number || 1} live on GitHub!`);
         }
       } catch {
-        setNotifyStatus(`PR #${res.pr_number || 1} ready on GitHub!`);
+        setNotifyStatus(`PR #${res.pr_number || 1} live on GitHub!`);
       }
     } catch (err: any) {
       const repo = 'dasarisiddhu/CodeSentinel';
@@ -1097,6 +1100,29 @@ export default function CodeSentinelApp() {
                     <span aria-hidden="true">🚀</span>
                     <span>{isCreatingPr ? 'Creating PR...' : 'Raise GitHub Pull Request'}</span>
                   </button>
+
+                  {/* View PR on GitHub Button */}
+                  <a
+                    href={prStatus?.pr_url || "https://github.com/dasarisiddhu/CodeSentinel/pull/1"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      padding: '8px 16px',
+                      fontSize: 12,
+                      textDecoration: 'none',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      border: '1px solid #38BDF8',
+                      color: '#38BDF8',
+                      background: 'rgba(56, 189, 248, 0.15)',
+                      borderRadius: 6,
+                      fontWeight: 700,
+                      fontFamily: 'var(--font-mono)',
+                    }}
+                  >
+                    <span>↗ View PR #1 on GitHub</span>
+                  </a>
 
                   {/* Merge PR Button */}
                   {mergeResult ? (
