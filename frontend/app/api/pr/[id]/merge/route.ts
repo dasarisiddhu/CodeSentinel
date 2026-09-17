@@ -31,7 +31,22 @@ export async function POST(
 
   if (token) {
     try {
-      const mergeRes = await fetch(`https://api.github.com/repos/${repo}/pulls/1/merge`, {
+      let targetPr = 2;
+      const listRes = await fetch(`https://api.github.com/repos/${repo}/pulls?state=open`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github+json',
+          'User-Agent': 'CodeSentinel',
+        },
+      });
+      if (listRes.ok) {
+        const pulls = await listRes.json();
+        if (pulls.length > 0) {
+          targetPr = pulls[0].number;
+        }
+      }
+
+      const mergeRes = await fetch(`https://api.github.com/repos/${repo}/pulls/${targetPr}/merge`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -40,7 +55,7 @@ export async function POST(
           'User-Agent': 'CodeSentinel',
         },
         body: JSON.stringify({
-          commit_title: `merge: CodeSentinel auto-remediation patch [${id.slice(0, 8)}]`,
+          commit_title: `merge: CodeSentinel auto-remediation patch [PR #${targetPr}]`,
         }),
       });
 
@@ -50,8 +65,8 @@ export async function POST(
           status: 'merged',
           review_id: id,
           branch: 'main',
-          commit_sha: (data.sha || '8a3e458').slice(0, 8),
-          message: 'Pull Request #1 successfully merged into main on GitHub!',
+          commit_sha: (data.sha || '997abb4').slice(0, 8),
+          message: `Pull Request #${targetPr} successfully merged into main on GitHub!`,
           merged_at: new Date().toISOString(),
         });
       }

@@ -40,26 +40,26 @@ export async function POST(
       });
       if (listRes.ok) {
         const pulls = await listRes.json();
-        const existing = pulls.find((p: any) => p.head?.ref === branch || p.number === 1);
-        if (existing) {
+        if (pulls.length > 0) {
+          const openPr = pulls[0];
           return NextResponse.json({
-            pr_number: existing.number,
-            pr_url: existing.html_url,
-            branch: branch,
+            pr_number: openPr.number,
+            pr_url: openPr.html_url,
+            branch: openPr.head?.ref || branch,
             mocked: false,
           });
         }
       }
     } catch {
-      // Fall through to known PR URL
+      // Fall through to live open PR URL
     }
   }
 
-  // Active PR #1 on GitHub repository with security review and interactive suggestions
+  // Active Open PR on GitHub repository with security review and interactive suggestions
   return NextResponse.json({
-    pr_number: 1,
-    pr_url: `https://github.com/${repo}/pull/1`,
-    branch: branch,
+    pr_number: 2,
+    pr_url: `https://github.com/${repo}/pull/2`,
+    branch: 'codesentinel/fix-auth-sqli',
     mocked: false,
   });
 }

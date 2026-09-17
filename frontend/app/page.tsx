@@ -1103,7 +1103,7 @@ export default function CodeSentinelApp() {
 
                   {/* View PR on GitHub Button */}
                   <a
-                    href={prStatus?.pr_url || "https://github.com/dasarisiddhu/CodeSentinel/pull/1"}
+                    href={prStatus?.pr_url || "https://github.com/dasarisiddhu/CodeSentinel/pull/2"}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
@@ -1121,7 +1121,7 @@ export default function CodeSentinelApp() {
                       fontFamily: 'var(--font-mono)',
                     }}
                   >
-                    <span>↗ View PR #1 on GitHub</span>
+                    <span>↗ View PR #{prStatus?.pr_number || 2} on GitHub</span>
                   </a>
 
                   {/* Merge PR Button */}
